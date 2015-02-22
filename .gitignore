@@ -1,0 +1,5 @@
+*.pyc
+appl/*
+build/*
+dist/*
+.idea/*

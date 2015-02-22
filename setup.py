@@ -21,7 +21,7 @@ def get_file_contents(file_path):
 
 
 setup(
-    name='2fa-appliance',
+    name='authappliance',
     version=VERSION,
     description='Appliance package for privacyIDEA: identity, multifactor authentication, '
                 'authorization, audit',
@@ -29,10 +29,10 @@ setup(
     license='AGPL v3',
     author_email='cornelius@privacyidea.org',
     url='http://www.privacyidea.org',
-    install_requires=["dialog"
+    install_requires=["python2-pythondialog"
                       ],
-    scripts=['2fa-appliance/privacyidea-setup',
-             '2fa-appliance/privacyidea-setup-tui'],
+    scripts=['authappliance/privacyidea-setup',
+             'authappliance/privacyidea-setup-tui'],
     include_package_data=True,
     classifiers=["License :: OSI Approved :: "
                  "GNU Affero General Public License v3",

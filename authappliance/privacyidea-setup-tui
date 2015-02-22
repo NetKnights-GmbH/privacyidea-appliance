@@ -24,11 +24,11 @@ import argparse
 import sys
 import time
 from dialog import Dialog
-from privacyidea.lib.appliance import (Backup,
-                                       FreeRADIUSConfig,
-                                       PrivacyIDEAConfig,
-                                       NginxConfig,
-                                       DEFAULT_CONFIG)
+from lib.appliance import (Backup,
+                            FreeRADIUSConfig,
+                            PrivacyIDEAConfig,
+                            NginxConfig,
+                            DEFAULT_CONFIG)
 
 DESCRIPTION = __doc__
 VERSION = "2.0"

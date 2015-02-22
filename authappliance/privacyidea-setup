@@ -26,9 +26,9 @@ DESCRIPTION = __doc__
 import argparse
 import sys
 import os
-from privacyidea.lib.ext import nginxparser
-from privacyidea.lib.appliance import NginxConfig
-from privacyidea.lib.appliance import PrivacyIDEAConfig
+from .lib.ext import nginxparser
+from .lib.appliance import NginxConfig
+from .lib.appliance import PrivacyIDEAConfig
 import pprint
  
 

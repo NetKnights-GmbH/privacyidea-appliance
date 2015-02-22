@@ -4,7 +4,7 @@ import codecs
 from pyparsing import White, Word, alphanums, CharsNotIn
 from pyparsing import Forward, Group, OneOrMore
 from pyparsing import pythonStyleComment
-from privacyidea.lib.freeradiusparser import BaseParser
+from .freeradiusparser import BaseParser
 
 
 class CronJobParser(BaseParser):

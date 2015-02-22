@@ -1,0 +1,5 @@
+2fa-appliance==2.0dev0
+argparse==1.2.1
+pyparsing==2.0.3
+python2-pythondialog==3.0.1
+wsgiref==0.1.2
