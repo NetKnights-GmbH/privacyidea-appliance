@@ -3,3 +3,7 @@ appl/*
 build/*
 dist/*
 .idea/*
+venv/*
+htmlcov/*
+DEBUILD
+pi_appliance.egg-info/

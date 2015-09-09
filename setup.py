@@ -21,7 +21,7 @@ def get_file_contents(file_path):
 
 
 setup(
-    name='authappliance',
+    name='pi-appliance',
     version=VERSION,
     description='Appliance package for privacyIDEA: identity, multifactor authentication, '
                 'authorization, audit',
@@ -31,8 +31,9 @@ setup(
     url='http://www.privacyidea.org',
     install_requires=["python2-pythondialog"
                       ],
-    scripts=['authappliance/privacyidea-setup',
-             'authappliance/privacyidea-setup-tui'],
+    scripts=['authappliance/privacyidea-setup'],
+    packages=find_packages(),
+    keyword="OTP Appliance",
     include_package_data=True,
     classifiers=["License :: OSI Approved :: "
                  "GNU Affero General Public License v3",

@@ -1,0 +1,6 @@
+[submodule "authappliance/lib/crontabparser"]
+	path = authappliance/lib/crontabparser
+	url = https://github.com/privacyidea/crontabparser
+[submodule "authappliance/lib/freeradiusparser"]
+	path = authappliance/lib/freeradiusparser
+	url = https://github.com/privacyidea/freeradiusparser
