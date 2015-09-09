@@ -476,23 +476,23 @@ class pSetup(object):
             cronjobs = self.Backup.get_cronjobs()
             choices = [("Add new backup date", "")]
             for cronjob in cronjobs:
-                if cronjob.get("user") == "privacyidea":
+                if cronjob.user == "privacyidea":
                     comment = "backup job."
-                    if cronjob.get("minute", "*") != "*":
+                    if cronjob.minute != "*":
                         comment = "hourly backup job."
-                    if cronjob.get("hour", "*") != "*":
+                    if cronjob.hour != "*":
                         comment = "daily backup job."
-                    if cronjob.get("dow", "*") != "*":
+                    if cronjob.dow != "*":
                         comment = "weekly backup job."
-                    if cronjob.get("dom", "*") != "*":
+                    if cronjob.dom != "*":
                         comment = "monthly backup job."
-                    if cronjob.get("month", "*") != "*":
+                    if cronjob.month != "*":
                         comment = "yearly backup job."
-                    choices.append(("%s %s %s %s %s" % (cronjob.get("minute", "*"),
-                                                        cronjob.get("hour", "*"),
-                                                        cronjob.get("dom", "*"),
-                                                        cronjob.get("month", "*"),
-                                                        cronjob.get("dow", "*")),
+                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
+                                                        cronjob.hour,
+                                                        cronjob.dom,
+                                                        cronjob.month,
+                                                        cronjob.dow),
                                    comment))
             code, tags = self.d.menu("Here you can define times, when "
                                      "to run a backup.",

@@ -12,7 +12,7 @@ info:
 	@echo "make ppa-dev      - upload to launchpad development repo"
 	
 #VERSION=1.3~dev5
-VERSION=2.0dev1
+VERSION=2.0~dev1
 SERIES="trusty precise vivid"
 LOCAL_SERIES=`lsb_release -a | grep Codename | cut -f2`
 SRCDIRS=authappliance
@@ -47,10 +47,22 @@ builddeb:
 	(cd DEBUILD/pi-appliance.org; debuild --no-lintian)
 
 ppa:
-	cp deploy/debian-ubuntu/changelog DEBUILD/privacyidea.org/debian/
-	sed -e s/"trusty) trusty; urgency"/"$(series)) $(series); urgency"/g deploy/debian-ubuntu/changelog > DEBUILD/privacyidea.org/debian/changelog
+	cp debian/changelog DEBUILD/pi-appliance.org/debian/
+	sed -e s/"trusty) trusty; urgency"/"$(series)) $(series); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
 	################# Build
-	(cd DEBUILD/privacyidea.org; debuild -sa -S)
+	(cd DEBUILD/pi-appliance.org; debuild -sa -S)
 	 ################ Upload to launchpad:
-	dput ppa:privacyidea/privacyidea DEBUILD/python-privacyidea_${VERSION}*_source.changes
+	dput ppa:privacyidea/appliance DEBUILD/pi-appliance_${VERSION}*_source.changes
+
+ppa-dev:
+	################### Check for the series
+	@echo "You need to specify a parameter series like $(SERIES)"
+	echo $(SERIES) | grep $(series)
+	################## Renew the changelog
+	cp debian/changelog DEBUILD/pi-appliance.org/debian/
+	sed -e s/"trusty) trusty; urgency"/"$(series)) $(series); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
+	################# Build
+	(cd DEBUILD/pi-appliance.org; debuild -sa -S)
+	################ Upload to launchpad:
+	dput ppa:privacyidea/appliance-dev DEBUILD/pi-appliance_${VERSION}*_source.changes
 

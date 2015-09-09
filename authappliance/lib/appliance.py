@@ -23,7 +23,7 @@ from subprocess import call
 import re
 import sys
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
-from .crontabparser.cronjobparser import CronJobParser
+from .crontabparser.cronjobparser import CronJobParser, CronJob
 import crypt
 import random
 from os import urandom
@@ -36,11 +36,10 @@ DBUSER = "privacyidea"
 POOL = "./0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 CRONTAB = "/etc/crontab"
 CRON_USER = "privacyidea"
-BACKUP_CMD = "/usr/bin/privacyidea-backup"
-RESTORE_CMD = "/usr/bin/privacyidea-restore %s"
+RESTORE_CMD = "pi-manage.py backup restore %s"
 DEFAULT_CONFIG = "/etc/privacyidea/pi.cfg"
 BACKUP_DIR = "/var/lib/privacyidea/backup"
-
+BACKUP_CMD = "pi-manage.py backup create -d %s" % BACKUP_DIR
 
 
 def generate_password(size=6, characters=string.ascii_lowercase +
@@ -54,8 +53,6 @@ class Backup(object):
                  config_dir="/etc/privacyidea/backup",
                  data_dir="/var/lib/privacyidea/backup"):
         self.data_dir = data_dir
-        self.assignments = {}
-        self.cronjobs = {}
         self.CP = CronJobParser()
 
     def backup_now(self, password=None):
@@ -80,10 +77,7 @@ class Backup(object):
         '''
         Parse the cronjob and return the backup times
         '''
-        config = self.CP.get_dict()
-        self.assignments = config.get("assignments")
-        self.cronjobs = config.get("cronjobs")
-        return self.cronjobs
+        return self.CP.cronjobs
     
     def add_backup_time(self, dc):
         '''
@@ -92,17 +86,10 @@ class Backup(object):
         :param dc: Date component of minute, hour, dom, month, dow
         :type dc: list
         '''
-        self.get_cronjobs()
-        self.cronjobs.append({"minute": dc[0],
-                              "hour": dc[1],
-                              "dom": dc[2],
-                              "month": dc[3],
-                              "dow": dc[4],
-                              "user": CRON_USER,
-                              "command": BACKUP_CMD})
-        self.CP.save({"assignments": self.assignments,
-                      "cronjobs": self.cronjobs},
-                     CRONTAB)
+        self.CP.cronjobs.append(CronJob(BACKUP_CMD, dc[0], user=CRON_USER,
+                                     hour=dc[1], dom=dc[2], month=dc[3],
+                                     dow=dc[4]))
+        self.CP.save(CRONTAB)
         
     def get_backups(self):
         '''
@@ -130,24 +117,21 @@ class Backup(object):
         '''
         Delete a backup time from the cronjob
         '''
-        self.get_cronjobs()
-        jobs_num = len(self.cronjobs)
+        jobs_num = len(self.CP.cronjobs)
         i = jobs_num - 1
         while i >= 0:
-            cronjob = self.cronjobs[i]
-            if (cronjob.get("hour") == hour and
-                cronjob.get("minute") == minute and
-                cronjob.get("dom") == dom and
-                cronjob.get("month") == month and
-                cronjob.get("dow") == dow and
-                cronjob.get("user") == CRON_USER):
-                self.cronjobs.pop(i)
+            cronjob = self.CP.cronjobs[i]
+            if (cronjob.hour == hour and
+                cronjob.minute == minute and
+                cronjob.dom == dom and
+                cronjob.month == month and
+                cronjob.dow == dow and
+                cronjob.user == CRON_USER):
+                self.CP.cronjobs.pop(i)
             i -= 1
             
-        if len(self.cronjobs) != jobs_num:
-            self.CP.save({"assignments": self.assignments,
-                          "cronjobs": self.cronjobs},
-                         CRONTAB)
+        if len(self.CP.cronjobs) != jobs_num:
+            self.CP.save(CRONTAB)
 
 
 class PrivacyIDEAConfig(object):
