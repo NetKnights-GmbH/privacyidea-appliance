@@ -29,7 +29,7 @@ import random
 from os import urandom
 import fileinput
 import socket
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, call
 
 DATABASE = "privacyidea"
 DBUSER = "privacyidea"
@@ -297,6 +297,7 @@ class FreeRADIUSConfig(object):
         '''
         if clientname:
             clients = self.clients_get()
+            # TODO: We fail to delete the last client?
             clients.pop(clientname, None)
             self.ccp.save(clients, self.config_file)
 
@@ -353,10 +354,10 @@ class FreeRADIUSConfig(object):
 class OSConfig(object):
 
     def reboot(self, echo=False):
-        '''
+        """
         Reboot OS
-        '''
-        p = Popen(['reboot'],
+        """
+        p = Popen(["sudo", 'reboot'],
                   stdin=PIPE,
                   stdout=PIPE,
                   stderr=PIPE)
@@ -368,6 +369,41 @@ class OSConfig(object):
         else:
             if echo:
                 print _err
+
+    def halt(self, echo=False):
+        """
+        Shutdown OS
+        """
+        p = Popen(["sudo", 'halt'],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        if r == 0:
+            if echo:
+                print "Halting system."
+        else:
+            if echo:
+                print _err
+
+    def set_password(self, username):
+        call(["passwd", username])
+
+    def change_password(self, username, password, echo=False):
+        p = Popen(['chpasswd'],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate("%s:%s" % (username, password))
+        r = p.returncode
+        if r == 0:
+            if echo:
+                print "Password changed."
+        else:
+            if echo:
+                print _err
+
 
 class WebserverConfig(object):
 
@@ -509,7 +545,7 @@ class WebserverConfig(object):
         Restart the webserver
         '''
         service = service or "apache2"
-        p = Popen(['service',
+        p = Popen(['sudo', 'service',
                    service,
                    'restart'],
                   stdin=PIPE,

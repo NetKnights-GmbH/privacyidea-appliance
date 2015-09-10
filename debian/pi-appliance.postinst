@@ -12,15 +12,22 @@ if [ -f /usr/share/dbconfig-common/dpkg/postinst.pgsql  ]; then
 fi
 
 function create_admin {
-	adduser piadmin --shell /usr/bin/privacyidea-setup-tui
+	useradd piadmin -m -G root,adm --shell /usr/bin/privacyidea-setup || true
+	# The admin needs access to all PI information:
+	# Thus the group root needs access
+	chmod -R g+rw /etc/privacyidea
 }
 
 case "$1" in
 
   configure)
 	mkdir -p /var/lib/privacyidea/backup
-	chown -R privacyidea /var/lib/privacyidea
 	create_admin
+	chown -R privacyidea /var/lib/privacyidea
+	chgrp -R root /var/lib/privacyidea
+	chmod -R g+rw /var/lib/privacyidea
+	# set crontab access rights
+	chmod 664 /etc/crontab
   ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)
