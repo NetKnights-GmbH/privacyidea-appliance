@@ -38,7 +38,381 @@ DESCRIPTION = __doc__
 VERSION = "2.0"
 
 
-class pSetup(object):
+class webserverMenu(object):
+
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+
+    def menu(self):
+        bt = "Webservice configuration"
+        while 1:
+            code, tags = self.d.menu("Configure Webserver",
+                                     choices=[("enable or disable webserver", ""),
+                                              ("webservices", ""),
+                                              ("create new certificates", ""),
+                                              ("restart services", "")
+                                         ],
+                                     backtitle=bt)
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("enable"):
+                    self.enable()
+                elif tags == "create new certificates":
+                    self.certificate()
+                elif tags.startswith("webservices"):
+                    self.services()
+                elif tags.startswith("restart"):
+                    self.restart()
+            else:
+                break
+
+    def certificate(self):
+        code = self.d.yesno("This will overwrite the existing "
+                            "certificate. Create new?",
+                            backtitle="Create webserver certificate",
+                            defaultno=1)
+        if code == self.d.DIALOG_OK:
+            self.WebserverConfig.create_certificates()
+            self.data_changed = True
+
+
+    def services(self):
+        webservices = self.WebserverConfig.get_webservices()
+        code, tags = self.d.checklist("Enable nginx webservices. Only enable "
+                                      "'privacyidea' unless you exactly know, "
+                                      "what you are doing!",
+                                      choices=webservices,
+                                      backtitle="Enable webserives")
+        if code == self.d.DIALOG_OK:
+            self.WebserverConfig.enable_webservice(tags)
+            self.data_changed = True
+
+    def restart(self):
+        code = self.d.yesno("Do you want to restart the services for the "
+                            "changes to take effect?")
+        if code == self.d.DIALOG_OK:
+            #self.d.gauge_start("Restarting uwsgi",
+            #                   title="Restarting services")
+            self.WebserverConfig.restart("uwsgi")
+            #self.d.gauge_update(50,
+            #                    "Restarting nginx...",
+            #                    update_text=True)
+            self.WebserverConfig.restart("nginx")
+            #self.d.gauge_update(100,
+            #                    "Restarted services",
+            #                    update_text=True)
+            #self.d.gauge_stop()
+            self.data_changed = False
+
+
+    def enable(self):
+        nginx, uwsgi = self.WebserverConfig.is_active()
+
+        code, tags = self.d.radiolist("enable or disable the webservice",
+                                      choices=[("enable",
+                                                "privacyIDEA "
+                                                "will start automatically "
+                                                "at boot time",
+                                                int(nginx and uwsgi)),
+                                               ("disable",
+                                                "privacyIDEA "
+                                                "will not start automatically.",
+                                                int(not(nginx and uwsgi)))],
+                                      width=70,
+                                      backtitle="Enable or disable webservice")
+        if code == self.d.DIALOG_OK:
+            if tags == "enable":
+                self.WebserverConfig.enable()
+                self.data_changed = True
+            elif tags == "disable":
+                self.WebserverConfig.disable()
+                self.data_changed = True
+
+
+
+class backupMenu(object):
+
+    def __init__(self, app, dialog):
+
+        self.app = app
+        self.d = dialog
+        self.Backup = Backup()
+
+    def menu(self):
+        bt = "Backup and Restore configuration"
+        while 1:
+            code, tags = self.d.menu("Backup and Restore",
+                                     choices=[("Configure backup", ""),
+                                              ("Backup now", ""),
+                                              ("View Backups", "")],
+                                     backtitle=bt)
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("Configure"):
+                    self.config()
+                elif tags.startswith("Backup"):
+                    self.now()
+                elif tags.startswith("View Backup"):
+                    self.view()
+            else:
+                break
+
+    def config(self):
+        '''
+        Display the cronjobs of user privacyidea
+        '''
+        bt = "Define backup times"
+        while 1:
+            cronjobs = self.Backup.get_cronjobs()
+            choices = [("Add new backup date", "")]
+            for cronjob in cronjobs:
+                if cronjob.user == "privacyidea":
+                    comment = "backup job."
+                    if cronjob.minute != "*":
+                        comment = "hourly backup job."
+                    if cronjob.hour != "*":
+                        comment = "daily backup job."
+                    if cronjob.dow != "*":
+                        comment = "weekly backup job."
+                    if cronjob.dom != "*":
+                        comment = "monthly backup job."
+                    if cronjob.month != "*":
+                        comment = "yearly backup job."
+                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
+                                                        cronjob.hour,
+                                                        cronjob.dom,
+                                                        cronjob.month,
+                                                        cronjob.dow),
+                                   comment))
+            code, tags = self.d.menu("Here you can define times, when "
+                                     "to run a backup.",
+                                     choices=choices,
+                                     backtitle=bt)
+
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("Add"):
+                    self.add()
+                else:
+                    self.delete(tags)
+            else:
+                break
+        pass
+
+    def add(self):
+        '''
+        Add a backup date.
+        '''
+        bt = "Add a new backup date"
+        code, bdate = self.d.inputbox("The date to run the backup. "
+                                      "Please enter it like this: "
+                                      "<Minute>  <Hour>  <Day-of-Month> "
+                                      " <Month>  <Day-of-Week>. You may"
+                                      " use '*' as wildcard entry.",
+                                      width=70,
+                                      backtitle=bt)
+
+        if code == self.d.DIALOG_OK:
+            date_fragments = bdate.split()
+            if len(date_fragments) == 5:
+                pass
+            elif len(date_fragments) == 4:
+                date_fragments.append('*')
+            elif len(date_fragments) == 3:
+                date_fragments.append('*')
+                date_fragments.append('*')
+            elif len(date_fragments) == 2:
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+            elif len(date_fragments) == 1:
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+            else:
+                return
+            self.Backup.add_backup_time(date_fragments)
+
+    def delete(self, tag):
+        '''
+        Delete a backup date
+        '''
+        bt = "Delete a backup date"
+        (minute, hour, dom, month, dow) = tag.split()
+        code = self.d.yesno("Do you want to delete the backup "
+                            "job at time %s:%s. "
+                            "Month:%s, Day of Month: %s, "
+                            "Day of week: %s?" %
+                            (hour, minute, month, dom, dow))
+        if code == self.d.DIALOG_OK:
+            # Delete backup job.
+            self.Backup.del_backup_time(hour, minute, month, dom, dow)
+
+    def restore(self, tag):
+        '''
+        Restore a backup
+        '''
+        bt = "Restore a backup"
+        code = self.d.yesno("Are you sure you want to restore the backup %s? "
+                            "Current data will be lost. The restore will "
+                            "restore the encryption key, administrator "
+                            "settings, token database, audit log, RADIUS "
+                            "clients, server certificates... "
+                            "If unsure, please "
+                            "perform a backup before restoring the old one."
+                            % tag,
+                            width=70)
+        if code == self.d.DIALOG_OK:
+            # Restore the backup
+            self.d.gauge_start("Restoring backup %s" % tag, percent=20)
+            self.Backup.restore_backup(tag)
+            self.d.gauge_update(percent=90)
+            self.data_changed = True
+            time.sleep(1)
+            self.d.gauge_stop()
+
+    def now(self):
+        '''
+        Run the backup now.
+        '''
+        self.Backup.backup_now()
+
+    def view(self):
+        '''
+        View the saved backup files to restore one.
+        '''
+        bt = "Restore a backup"
+        while 1:
+            backups = self.Backup.get_backups()
+            choices = []
+            for bfile in sorted(backups.keys(), reverse=True):
+                choices.append((bfile, "%s %s" % (backups[bfile].get("size"),
+                                                  backups[bfile].get("time"))))
+            if len(choices) == 0:
+                    self.d.msgbox("No backups found!")
+                    break
+            else:
+                code, tags = self.d.menu("Choose a backup you wish to "
+                                         "restore...",
+                                         choices=choices,
+                                         backtitle=bt,
+                                         width=78)
+                if code == self.d.DIALOG_OK:
+                    self.restore(tags)
+                else:
+                    break
+
+
+
+class radiusMenu(object):
+
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+        try:
+            self.RadiusConfig = FreeRADIUSConfig()
+        except:
+            # No Radius Server available
+            self.RadiusConfig = None
+
+    def menu(self):
+        while 1:
+            code, tags = self.d.menu("Configure FreeRADIUS",
+                                     choices=[("view config",""),
+                                              ("client config", ""),
+                                              ("sites", "Enable and disable RADIUS"
+                                                        " sites")
+                                         ])
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("client"):
+                    self.clients()
+                if tags.startswith("sites"):
+                    self.sites()
+            else:
+                break
+
+    def sites(self):
+        sites = self.RadiusConfig.get_sites()
+        code, tags = self.d.checklist("The FreeRADIUS sites you want to "
+                                      "enable. You should only enable "
+                                      "'privacyidea' unless you know "
+                                      "exactly what you are doing!",
+                                      choices=sites,
+                                      backtitle="Enable sites")
+        if code == self.d.DIALOG_OK:
+            self.RadiusConfig.enable_sites(tags)
+
+    def clients(self):
+        while 1:
+            clients = [("Add new client", "Add a new RADIUS client")]
+            clients_from_file = self.RadiusConfig.clients_get()
+            for client in clients_from_file.keys():
+                clients.append( (client, "") )
+            code, tags = self.d.menu("You can select an existing RADIUS client "
+                                     "to either delete it or change it "
+                                     "or create a new client",
+                                     choices=clients,
+                                     backtitle="Manage RADIUS clients")
+
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("Add new"):
+                    self.add()
+                else:
+                    self.manage(tags)
+            else:
+                break
+
+    def add(self):
+        bt = "Add a new RADIUS client"
+        code, clientname = self.d.inputbox("The name of the new client",
+                                           backtitle=bt)
+        if code != self.d.DIALOG_OK:
+            return
+        code, ip = self.d.inputbox("The IP address of the new client %s" %
+                                   clientname,
+                                   backtitle=bt)
+        if code != self.d.DIALOG_OK:
+            return
+        code, netmask = self.d.inputbox("The netmask of the new client %s. "
+                                        "The netmask should be in CIDR notation, "
+                                        "i.e. use 24, NOT 255.255.255.0" %
+                                        clientname,
+                                        backtitle=bt)
+        if code != self.d.DIALOG_OK:
+            return
+        code, secret = self.d.inputbox("The secret of the new client %s" %
+                                       clientname,
+                                       backtitle=bt)
+
+        code, shortname = self.d.inputbox("The shortname of the new client %s" %
+                                          clientname,
+                                          backtitle=bt)
+
+        if code == self.d.DIALOG_OK:
+            client = {}
+            if ip:
+                client["ipaddr"] = ip
+            if netmask:
+                client["netmask"] = netmask
+            if secret:
+                client["secret"] = secret
+            if shortname:
+                client["shortname"] = shortname
+            self.RadiusConfig.client_add({clientname: client})
+
+
+    def manage(self, clientname):
+        bt="Manage client %s" % clientname
+        code, tags = self.d.menu("Manage client %s" % clientname,
+                                 choices=[("Delete client", "")],
+                                 backtitle=bt)
+        if code == self.d.DIALOG_OK:
+            if tags.startswith("Delete"):
+                self.d.yesno("Do you really want to delete the "
+                             "RADIUS client %s?" % clientname)
+                self.RadiusConfig.client_delete(clientname)
+
+
+class mainMenu(object):
     
     def __init__(self, config=None):
         self.data_changed = False
@@ -49,32 +423,29 @@ class pSetup(object):
             
         self.pConfig = PrivacyIDEAConfig(self.config_file)
 
-        self.Backup = Backup()
-        
-        try:
-            self.RadiusConfig = FreeRADIUSConfig()
-        except:
-            # No Radius Server available
-            self.RadiusConfig = None
-
         self.app = create_app(config_name="production")
         self.d = Dialog(dialog="dialog")
+        self.radiusDialog = radiusMenu(self.app, self.d)
+        self.backupDialog = backupMenu(self.app, self.d)
+        self.webserverDialog = webserverMenu(self.app, self.d)
 
-        
-        
     def main_menu(self):
-        choices=[("privacyidea", "",
+        choices=[("privacyIDEA", "",
                   "Configure privacyIDEA application "
                   "stuff like administrators.")
                   ]
-        if self.RadiusConfig:
-            choices.append( ("FreeRADIUS","",
-                             "Configure RADIUS settings like "
-                             "the RADIUS clients.") )
-        choices.append(("Backup and Restore","",
+        if self.radiusDialog.RadiusConfig:
+            choices.append(("FreeRADIUS", "",
+                            "Configure RADIUS settings like "
+                            "the RADIUS clients."))
+        choices.append(("Webserver", "",
+                        "Restart Webserver and manage certificate."))
+        choices.append(("Backup and Restore", "",
                         "Backup or Restore of privacyIDEA"
                         "configuration and database and"
                         "RADIUS clients."))
+        choices.append(("Operating System", "",
+                        "Configure SSH and Login settings for the OS."))
         while 1:
             code, tags = self.d.menu("Which subject do you want to configure?",
                                      choices=choices,
@@ -83,12 +454,12 @@ class pSetup(object):
                                      item_help=1)
             if code == self.d.DIALOG_OK:
                 print tags
-                if tags == "privacyidea":
+                if tags == "privacyIDEA":
                     self.privacyidea_menu()
                 elif tags == "FreeRADIUS":
-                    self.radius_menu()
+                    self.radiusDialog.menu()
                 elif tags.startswith("Backup"):
-                    self.backup_menu()
+                    self.backupDialog.menu()
                     
             else:
                 # End
@@ -328,7 +699,10 @@ class pSetup(object):
         password = None
         while 1:
             code, password1 = self.d.passwordbox("Enter the password for the "
-                                                 "administrator %s" % admin_name,
+                                                 "administrator %s.\n"
+                                                 "(Your typing will not be "
+                                                 "visible)" %
+                                                 admin_name,
                                                  backtitle=bt)
                 
             if code == self.d.DIALOG_OK:
@@ -351,7 +725,7 @@ class pSetup(object):
         return password 
             
     def privacyidea_admin_add(self):
-        bt="Add a new administrator"
+        bt = "Add a new administrator"
         code, admin_name = self.d.inputbox("The username of the new "
                                      "administrator",
                                      backtitle=bt)
@@ -449,292 +823,6 @@ class pSetup(object):
            self.pConfig.get_loglevel())
         self.d.scrollbox(text)
     
-    def backup_menu(self):
-        bt = "Backup and Restore configuration"
-        while 1:
-            code, tags = self.d.menu("Backup and Restore",
-                                     choices=[("Configure backup", ""),
-                                              ("Backup now", ""),
-                                              ("View Backups", "")],
-                                     backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Configure"):
-                    self.backup_config()
-                elif tags.startswith("Backup"):
-                    self.backup_now()
-                elif tags.startswith("View Backup"):
-                    self.backup_view()
-            else:
-                break
-            
-    def backup_config(self):
-        '''
-        Display the cronjobs of user privacyidea
-        '''
-        bt = "Define backup times"
-        while 1:
-            cronjobs = self.Backup.get_cronjobs()
-            choices = [("Add new backup date", "")]
-            for cronjob in cronjobs:
-                if cronjob.user == "privacyidea":
-                    comment = "backup job."
-                    if cronjob.minute != "*":
-                        comment = "hourly backup job."
-                    if cronjob.hour != "*":
-                        comment = "daily backup job."
-                    if cronjob.dow != "*":
-                        comment = "weekly backup job."
-                    if cronjob.dom != "*":
-                        comment = "monthly backup job."
-                    if cronjob.month != "*":
-                        comment = "yearly backup job."
-                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
-                                                        cronjob.hour,
-                                                        cronjob.dom,
-                                                        cronjob.month,
-                                                        cronjob.dow),
-                                   comment))
-            code, tags = self.d.menu("Here you can define times, when "
-                                     "to run a backup.",
-                                     choices=choices,
-                                     backtitle=bt)
-            
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add"):
-                    self.backup_add()
-                else:
-                    self.backup_delete(tags)
-            else:
-                break
-        pass
-    
-    def backup_add(self):
-        '''
-        Add a backup date.
-        '''
-        bt = "Add a new backup date"
-        code, bdate = self.d.inputbox("The date to run the backup. "
-                                      "Please enter it like this: "
-                                      "<Minute>  <Hour>  <Day-of-Month> "
-                                      " <Month>  <Day-of-Week>. You may"
-                                      " use '*' as wildcard entry.",
-                                      width=70,
-                                      backtitle=bt)
-        
-        if code == self.d.DIALOG_OK:
-            date_fragments = bdate.split()
-            if len(date_fragments) == 5:
-                pass
-            elif len(date_fragments) == 4:
-                date_fragments.append('*')
-            elif len(date_fragments) == 3:
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 2:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 1:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            else:
-                return
-            self.Backup.add_backup_time(date_fragments)
-    
-    def backup_delete(self, tag):
-        '''
-        Delete a backup date
-        '''
-        bt = "Delete a backup date"
-        (minute, hour, dom, month, dow) = tag.split()
-        code = self.d.yesno("Do you want to delete the backup "
-                            "job at time %s:%s. "
-                            "Month:%s, Day of Month: %s, "
-                            "Day of week: %s?" %
-                            (hour, minute, month, dom, dow))
-        if code == self.d.DIALOG_OK:
-            # Delete backup job.
-            self.Backup.del_backup_time(hour, minute, month, dom, dow)
-            
-    def backup_restore(self, tag):
-        '''
-        Restore a backup
-        '''
-        bt = "Restore a backup"
-        code = self.d.yesno("Are you sure you want to restore the backup %s? "
-                            "Current data will be lost. The restore will "
-                            "restore the encryption key, administrator "
-                            "settings, token database, audit log, RADIUS "
-                            "clients, server certificates... " 
-                            "If unsure, please "
-                            "perform a backup before restoring the old one."
-                            % tag,
-                            width=70)
-        if code == self.d.DIALOG_OK:
-            # Restore the backup
-            self.d.gauge_start("Restoring backup %s" % tag, percent=20)
-            self.Backup.restore_backup(tag)
-            self.d.gauge_update(percent=90)
-            self.data_changed = True
-            time.sleep(1)
-            self.d.gauge_stop()
-        
-    def backup_now(self):
-        '''
-        Run the backup now.
-        '''
-        self.Backup.backup_now()
-    
-    def backup_view(self):
-        '''
-        View the saved backup files to restore one.
-        '''        
-        bt = "Restore a backup"
-        while 1:
-            backups = self.Backup.get_backups()
-            choices = []
-            for bfile in sorted(backups.keys(), reverse=True):
-                choices.append((bfile, "%s %s" % (backups[bfile].get("size"),
-                                                  backups[bfile].get("time"))))
-            if len(choices) == 0:
-                    self.d.msgbox("No backups found!")
-                    break
-            else:
-                code, tags = self.d.menu("Choose a backup you wish to "
-                                         "restore...",
-                                         choices=choices,
-                                         backtitle=bt,
-                                         width=78)
-                if code == self.d.DIALOG_OK:
-                    self.backup_restore(tags)
-                else:
-                    break
-        
-    
-    def webserver_menu(self):
-        bt = "Webservice configuration"
-        while 1:
-            code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("enable or disable webserver", ""),
-                                              ("nginx webservices", ""),
-                                              ("create new certificates", ""),
-                                              ("restart services", "")
-                                         ],
-                                     backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("enable"):
-                    self.webserver_enable()
-                elif tags == "create new certificates":
-                    self.webserver_certificate()
-                elif tags.startswith("view"):
-                    self.webserver_view()
-                elif tags.startswith("nginx"):
-                    self.webserver_services()
-                elif tags.startswith("restart"):
-                    self.webserver_restart()
-            else:
-                break
-        
-
-    def radius_menu(self):
-        while 1:
-            code, tags = self.d.menu("Configure FreeRADIUS",
-                                     choices=[("view config",""),
-                                              ("client config", ""),
-                                              ("sites", "Enable and disable RADIUS" 
-                                                        " sites")
-                                         ])
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("client"):
-                    self.radius_clients()
-                if tags.startswith("sites"):
-                    self.radius_sites()
-            else:
-                break
-    
-    def radius_sites(self):
-        sites = self.RadiusConfig.get_sites()
-        code, tags = self.d.checklist("The FreeRADIUS sites you want to "
-                                      "enable. You should only enable "
-                                      "'privacyidea' unless you know "
-                                      "exactly what you are doing!",
-                                      choices=sites,
-                                      backtitle="Enable sites")
-        if code == self.d.DIALOG_OK:
-            self.RadiusConfig.enable_sites(tags)    
-    
-    def radius_clients(self):
-        while 1:
-            clients = [("Add new client", "Add a new RADIUS client")]
-            clients_from_file = self.RadiusConfig.clients_get()
-            for client in clients_from_file.keys():
-                clients.append( (client, "") )
-            code, tags = self.d.menu("You can select an existing RADIUS client "
-                                     "to either delete it or change it " 
-                                     "or create a new client",
-                                     choices=clients,
-                                     backtitle="Manage RADIUS clients")
-            
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add new"):
-                    self.radius_client_add()
-                else:
-                    self.radius_client_manage(tags)
-            else:
-                break
-
-    def radius_client_add(self):
-        bt="Add a new RADIUS client"
-        code, clientname = self.d.inputbox("The name of the new client",
-                                           backtitle=bt)
-        if code != self.d.DIALOG_OK:
-            return
-        code, ip = self.d.inputbox("The IP address of the new client %s" %
-                                   clientname,
-                                   backtitle=bt)
-        if code != self.d.DIALOG_OK:
-            return
-        code, netmask = self.d.inputbox("The netmask of the new client %s. "
-                                        "The netmask should be in CIDR notation, "
-                                        "i.e. use 24, NOT 255.255.255.0" %
-                                        clientname,
-                                        backtitle=bt)
-        if code != self.d.DIALOG_OK:
-            return
-        code, secret = self.d.inputbox("The secret of the new client %s" %
-                                       clientname,
-                                       backtitle=bt)
-        
-        code, shortname = self.d.inputbox("The shortname of the new client %s" %
-                                          clientname,
-                                          backtitle=bt)
-         
-        if code == self.d.DIALOG_OK:
-            client = {}
-            if ip:
-                client["ipaddr"] = ip
-            if netmask:
-                client["netmask"] = netmask
-            if secret:
-                client["secret"] = secret
-            if shortname:
-                client["shortname"] = shortname
-            self.RadiusConfig.client_add({clientname: client})
-            
-    
-    def radius_client_manage(self, clientname):
-        bt="Manage client %s" % clientname
-        code, tags = self.d.menu("Manage client %s" % clientname,
-                                 choices=[("Delete client", "")],
-                                 backtitle=bt)
-        if code == self.d.DIALOG_OK:
-            if tags.startswith("Delete"):
-                self.d.yesno("Do you really want to delete the "
-                             "RADIUS client %s?" % clientname)
-                self.RadiusConfig.client_delete(clientname)
-                
 
 
 def create_arguments():
@@ -755,7 +843,7 @@ def create_arguments():
 def main():
     locale.setlocale(locale.LC_ALL, '')
     args = create_arguments()
-    pS = pSetup(config=args.file)
+    pS = mainMenu(config=args.file)
     pS.main_menu()
     
 
