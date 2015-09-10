@@ -268,6 +268,7 @@ class FreeRADIUSConfig(object):
         :param client: clients.conf file.
         '''
         # clients
+        self.config_file = client
         self.ccp = ClientConfParser(infile=client)
         self.config_path = os.path.dirname(client)
         self.dir_enabled = self.config_path + "/sites-enabled"
@@ -287,7 +288,7 @@ class FreeRADIUSConfig(object):
             for client, attributes in client.iteritems():
                 clients[client] = attributes
             
-            self.ccp.save(clients)
+            self.ccp.save(clients, self.config_file)
         
     def client_delete(self, clientname=None):
         '''
@@ -297,7 +298,7 @@ class FreeRADIUSConfig(object):
         if clientname:
             clients = self.clients_get()
             clients.pop(clientname, None)
-            self.ccp.save(clients)
+            self.ccp.save(clients, self.config_file)
 
     def set_module_perl(self):
         '''
@@ -347,10 +348,179 @@ class FreeRADIUSConfig(object):
             else:
                 ret.append((k, "", 0))
         return ret
-        
-#
-#  users:
-#     DEFAULT Auth-Type := perl
-#
-#
-#
+
+
+class OSConfig(object):
+
+    def reboot(self, echo=False):
+        '''
+        Reboot OS
+        '''
+        p = Popen(['reboot'],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        if r == 0:
+            if echo:
+                print "Rebooting system."
+        else:
+            if echo:
+                print _err
+
+class WebserverConfig(object):
+
+    NGINX = 0
+    UWSGI = 1
+    default_file = ["privacyidea", "privacyidea.xml"]
+    default_dir_enabled = ["/etc/nginx/sites-enabled",
+                           "/etc/uwsgi/apps-enabled"]
+    default_dir_available = ["/etc/nginx/sites-available",
+                             "/etc/uwsgi/apps-available"]
+
+    def __init__(self, files=None):
+        '''
+        :param files: The default config files for nginx and uwsgi
+        :type files: list of two files
+        '''
+        if files is None:
+            files = self.default_file
+        self.configfile = files
+
+    def is_active(self):
+        '''
+        :return: A list of boolean indicating if nginx and uwsgi are active
+        '''
+        r1 = os.path.isfile(self.default_dir_enabled[0] + "/" +
+                            self.configfile[0])
+        r2 = os.path.isfile(self.default_dir_enabled[1] + "/" +
+                            self.configfile[1])
+        return r1, r2
+
+    def get(self):
+        config = nginxparser.load(open(self.default_dir_available[self.NGINX]
+                                       + "/" +
+                                       self.configfile[self.NGINX]))
+        return config
+
+    def enable(self):
+        for i in [self.NGINX, self.UWSGI]:
+            if not os.path.exists(self.default_dir_enabled[i]):
+                os.mkdir(self.default_dir_enabled[i])
+
+            if not os.path.exists(self.default_dir_enabled[i] +
+                                  "/" + self.configfile[i]):
+                os.symlink(self.default_dir_available[i] +
+                           "/" + self.configfile[i],
+                           self.default_dir_enabled[i] +
+                           "/" + self.configfile[i])
+        return
+
+    def enable_webservice(self, webservices):
+        """
+        :param webservices: list of activated links
+        :type webservices: list
+        """
+        if not os.path.exists(self.default_dir_enabled[self.NGINX]):
+            os.mkdir(self.default_dir_enabled[self.NGINX])
+
+        active_list = os.listdir(self.default_dir_enabled[self.NGINX])
+        # deactivate services
+        for service in active_list:
+            if service not in webservices:
+                # disable webservice
+                os.unlink(self.default_dir_enabled[self.NGINX] +
+                          "/" + service)
+        # activate services
+        for service in webservices:
+            # enable webservice
+            if not os.path.exists(self.default_dir_enabled[self.NGINX] +
+                                  "/" + service):
+                os.symlink(self.default_dir_available[self.NGINX] +
+                           "/" + service,
+                           self.default_dir_enabled[self.NGINX] +
+                           "/" + service)
+
+    def get_webservices(self):
+        '''
+        returns the contents of /etc/nginx/sites-available
+        '''
+        ret = []
+        file_list = os.listdir(self.default_dir_available[self.NGINX])
+        active_list = os.listdir(self.default_dir_enabled[self.NGINX])
+        for k in file_list:
+            if k in active_list:
+                ret.append((k, "", 1))
+            else:
+                ret.append((k, "", 0))
+        return ret
+
+    def disable(self):
+        for i in [self.NGINX, self.UWSGI]:
+            os.unlink(self.default_dir_enabled[i] + "/" + self.configfile[i])
+        return
+
+    def _get_val(self, data, key):
+        '''
+        returns a value for a given key from a list of tuples.
+        '''
+        for kv in data:
+            if kv[0] == key:
+                return kv[1]
+        return
+
+    def get_certificates(self):
+        '''
+        return a tuple of the certificate and the private key
+        '''
+        config = self.get()
+        cert = None
+        key = None
+        for server in config:
+            if server[0] == ["server"]:
+                # server config
+                if self._get_val(server[1], "listen")[-3:].lower() == "ssl":
+                    # the ssl config
+                    cert = self._get_val(server[1], "ssl_certificate")
+                    key = self._get_val(server[1], "ssl_certificate_key")
+        return cert, key
+
+    def create_certificates(self):
+        certificates = self.get_certificates()
+        hostname = socket.getfqdn()
+        print("Generating SSL certificate %s and key %s" % certificates)
+        if certificates[0] and certificates[1]:
+            command = ("openssl req -x509 -newkey rsa:2048 -keyout %s -out"
+                       " %s -days 1000 -subj /CN=%s -nodes" %
+                       (certificates[1],
+                        certificates[0],
+                        hostname))
+            r = call(command, shell=True)
+            if r == 0:
+                print "Created the certificate and the key."
+                os.chmod(certificates[1], 0x400)
+            else:
+                print "Failed to create key and certificate: %i" % r
+                sys.exit(r)
+
+    def restart(self, service=None, do_print=False):
+        '''
+        Restart the webserver
+        '''
+        service = service or "apache2"
+        p = Popen(['service',
+                   service,
+                   'restart'],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        if r == 0:
+            if do_print:
+                print "Service %s restarted" % service
+        else:
+            if do_print:
+                print _err
+

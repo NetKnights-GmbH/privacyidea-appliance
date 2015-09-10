@@ -27,6 +27,7 @@ from dialog import Dialog
 from authappliance.lib.appliance import (Backup,
                            FreeRADIUSConfig,
                            PrivacyIDEAConfig,
+                           WebserverConfig, OSConfig,
                            DEFAULT_CONFIG)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
@@ -38,21 +39,51 @@ DESCRIPTION = __doc__
 VERSION = "2.0"
 
 
-class webserverMenu(object):
+class OSMenu(object):
 
     def __init__(self, app, dialog):
         self.app = app
         self.d = dialog
+        self.os = OSConfig()
+
+    def menu(self):
+        bt = "Operating System"
+        while 1:
+            code, tags = self.d.menu("Operating System",
+                                     choices=[("reboot system", "")],
+                                     backtitle=bt)
+
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("reboot"):
+                    self.os.reboot(echo=True)
+                    self.d.msgbox("Rebooting the system. Standby and wait for "
+                                  "the system come up again.")
+
+            else:
+                break
+
+class WebserverMenu(object):
+
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+        self.webserver = WebserverConfig()
 
     def menu(self):
         bt = "Webservice configuration"
         while 1:
+            # TODO: Add more webserver tasks
+            #code, tags = self.d.menu("Configure Webserver",
+            #                         choices=[("enable or disable
+            ## webserver", ""),
+            #                                  ("webservices", ""),
+            #                                  ("create new certificates", ""),
+            #                                  ("restart services", "")
+            #                             ],
+            #                         backtitle=bt)
             code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("enable or disable webserver", ""),
-                                              ("webservices", ""),
-                                              ("create new certificates", ""),
-                                              ("restart services", "")
-                                         ],
+                                     choices=[("restart services", "")
+                                              ],
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("enable"):
@@ -91,17 +122,7 @@ class webserverMenu(object):
         code = self.d.yesno("Do you want to restart the services for the "
                             "changes to take effect?")
         if code == self.d.DIALOG_OK:
-            #self.d.gauge_start("Restarting uwsgi",
-            #                   title="Restarting services")
-            self.WebserverConfig.restart("uwsgi")
-            #self.d.gauge_update(50,
-            #                    "Restarting nginx...",
-            #                    update_text=True)
-            self.WebserverConfig.restart("nginx")
-            #self.d.gauge_update(100,
-            #                    "Restarted services",
-            #                    update_text=True)
-            #self.d.gauge_stop()
+            self.webserver.restart()
             self.data_changed = False
 
 
@@ -130,7 +151,7 @@ class webserverMenu(object):
 
 
 
-class backupMenu(object):
+class BackupMenu(object):
 
     def __init__(self, app, dialog):
 
@@ -303,7 +324,7 @@ class backupMenu(object):
 
 
 
-class radiusMenu(object):
+class RadiusMenu(object):
 
     def __init__(self, app, dialog):
         self.app = app
@@ -317,11 +338,11 @@ class radiusMenu(object):
     def menu(self):
         while 1:
             code, tags = self.d.menu("Configure FreeRADIUS",
-                                     choices=[("view config",""),
-                                              ("client config", ""),
-                                              ("sites", "Enable and disable RADIUS"
-                                                        " sites")
-                                         ])
+                                     choices=[("client config", ""),
+                                              ("sites",
+                                               "Enable and disable RADIUS "
+                                               "sites")
+                                              ])
             if code == self.d.DIALOG_OK:
                 if tags.startswith("client"):
                     self.clients()
@@ -345,8 +366,10 @@ class radiusMenu(object):
         while 1:
             clients = [("Add new client", "Add a new RADIUS client")]
             clients_from_file = self.RadiusConfig.clients_get()
-            for client in clients_from_file.keys():
-                clients.append( (client, "") )
+            for client, v in clients_from_file.items():
+                clients.append((client, "%s/%s (%s)" % (v.get("ipaddr"),
+                                                        v.get("netmask"),
+                                                        v.get("shortname"))))
             code, tags = self.d.menu("You can select an existing RADIUS client "
                                      "to either delete it or change it "
                                      "or create a new client",
@@ -399,10 +422,9 @@ class radiusMenu(object):
                 client["shortname"] = shortname
             self.RadiusConfig.client_add({clientname: client})
 
-
     def manage(self, clientname):
-        bt="Manage client %s" % clientname
-        code, tags = self.d.menu("Manage client %s" % clientname,
+        bt = "Manage client %s" % clientname
+        code, tags = self.d.menu("Manage client %s." % clientname,
                                  choices=[("Delete client", "")],
                                  backtitle=bt)
         if code == self.d.DIALOG_OK:
@@ -412,7 +434,7 @@ class radiusMenu(object):
                 self.RadiusConfig.client_delete(clientname)
 
 
-class mainMenu(object):
+class MainMenu(object):
     
     def __init__(self, config=None):
         self.data_changed = False
@@ -425,9 +447,10 @@ class mainMenu(object):
 
         self.app = create_app(config_name="production")
         self.d = Dialog(dialog="dialog")
-        self.radiusDialog = radiusMenu(self.app, self.d)
-        self.backupDialog = backupMenu(self.app, self.d)
-        self.webserverDialog = webserverMenu(self.app, self.d)
+        self.radiusDialog = RadiusMenu(self.app, self.d)
+        self.backupDialog = BackupMenu(self.app, self.d)
+        self.webserverDialog = WebserverMenu(self.app, self.d)
+        self.osDialog = OSMenu(self.app, self.d)
 
     def main_menu(self):
         choices=[("privacyIDEA", "",
@@ -460,11 +483,15 @@ class mainMenu(object):
                     self.radiusDialog.menu()
                 elif tags.startswith("Backup"):
                     self.backupDialog.menu()
+                elif tags.startswith("Webserver"):
+                    self.webserverDialog.menu()
+                elif tags.startswith("Operating"):
+                    self.osDialog.menu()
                     
             else:
                 # End
                 if self.data_changed:
-                    self.webserver_restart()
+                    self.webserverDialog.restart()
                 break
     
     def privacyidea_menu(self):
@@ -843,7 +870,7 @@ def create_arguments():
 def main():
     locale.setlocale(locale.LC_ALL, '')
     args = create_arguments()
-    pS = mainMenu(config=args.file)
+    pS = MainMenu(config=args.file)
     pS.main_menu()
     
 
