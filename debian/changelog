@@ -1,5 +1,6 @@
-pi-appliance (2.0~dev1) trusty; urgency=low
+pi-appliance (2.0~dev3) trusty; urgency=low
 
   * init
+  * sudo
 
- -- Cornelius Kölbel <cornelius@privacyidea.org>  Wed, 09 Sep 2015 15:30:00 +0200
+ -- Cornelius Kölbel <cornelius@privacyidea.org>  Fri, 11 Sep 2015 15:30:00 +0200

@@ -16,6 +16,9 @@ function create_admin {
 	# The admin needs access to all PI information:
 	# Thus the group root needs access
 	chmod -R g+rw /etc/privacyidea
+	# if the user exist, we set the shell and groups
+	chsh -s /usr/bin/privacyidea-setup piadmin
+	adduser piadmin root	
 }
 
 case "$1" in
