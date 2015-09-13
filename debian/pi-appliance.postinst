@@ -31,6 +31,10 @@ case "$1" in
 	chmod -R g+rw /var/lib/privacyidea
 	# set crontab access rights
 	chmod 664 /etc/crontab
+
+	# set rights on network/interfaces
+	chgrp root /etc/network/interfaces
+	chmod 664 /etc/network/interfaces
   ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)

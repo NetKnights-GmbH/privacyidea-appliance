@@ -91,9 +91,9 @@ IP address: %s
 Netmask   : %s
 Nameserver: %s
 Gateway   : %s
-""" % (diskspace, network.get("ip"),
+""" % (diskspace, network.get("address"),
        network.get("netmask"),
-       network.get("nameserver"),
+       network.get("dns-nameservers"),
        network.get("gateway")), width=60, height=20)
 
     def network_configuration(self):
@@ -101,10 +101,10 @@ Gateway   : %s
         network = self.os.get_network()
         code, r = self.d.inputbox("Please enter the IP address",
                                   width=60,
-                                  init=network.get("ip"))
+                                  init=network.get("address"))
         if code is not self.d.DIALOG_OK:
             return
-        network["ip"] = r
+        network["address"] = r
         code, r = self.d.inputbox("Please enter the Netmask",
                                   width=60,
                                   init=network.get("netmask"))
@@ -119,27 +119,28 @@ Gateway   : %s
         network["gateway"] = r
         code, r = self.d.inputbox("Please enter the Nameserver",
                                   width=60,
-                                  init=network.get("nameserver"))
+                                  init=network.get("dns-nameservers"))
         if code is not self.d.DIALOG_OK:
             return
-        network["nameserver"] = r
+        network["dns-nameservers"] = r
         code = self.d.yesno("Are these values ok - and shall I activate the "
                             "new network configuration? \n"
                             "%s/%s\n"
                             "Gateway: %s\n"
                             "Nameserver: %s" %
-                            (network.get("ip"), network.get("netmask"),
-                             network.get("gateway"), network.get("nameserver")),
+                            (network.get("address"), network.get("netmask"),
+                             network.get("gateway"), network.get(
+                                "dns-nameservers")),
                             width=60)
         if code == self.d.DIALOG_OK:
-            pass
-            # TODO: Activate the IP address
+            self.os.set_network(network)
 
 
 class WebserverMenu(object):
 
     def __init__(self, app, dialog):
         self.app = app
+        self.os = OSConfig()
         self.d = dialog
         self.webserver = WebserverConfig()
 
@@ -196,7 +197,7 @@ class WebserverMenu(object):
         code = self.d.yesno("Do you want to restart the services for the "
                             "changes to take effect?")
         if code == self.d.DIALOG_OK:
-            self.webserver.restart()
+            self.os.restart()
             self.data_changed = False
 
     def enable(self):

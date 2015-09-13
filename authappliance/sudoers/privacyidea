@@ -1,6 +1,6 @@
 # This file goes to /etc/sudoers.d/privacyidea
 # Cmnd alias specification
-Cmnd_Alias SYSTEM = /sbin/reboot, /sbin/halt
+Cmnd_Alias SYSTEM = /sbin/reboot, /sbin/halt, /sbin/ifup, /sbin/ifdown
 Cmnd_Alias WEBSERVER = /usr/sbin/service
 
 # User privilege specification

@@ -408,10 +408,64 @@ class OSConfig(object):
         return ""
 
     def get_network(self):
-        return self.np.get_interfaces().get("eth0")
+        return self.np.get_interfaces().get("eth0").get("options")
 
-    def set_network(self, ip, netmask, dns, gateway):
-        pass
+    def set_network(self, options):
+        """
+        This sets the network of eth0
+
+        :param options: keys: address, netmask, dns-nameservers, gateway
+        :return:
+        """
+        self.np.interfaces.get("eth0")["options"] = options
+        self.np.save()
+        self.ifdown("eth0")
+        self.ifup("eth0")
+
+
+    @classmethod
+    def ifdown(cls, iface):
+        p = Popen(['sudo', 'ifdown',
+                   iface],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        print r
+
+    @classmethod
+    def ifup(cls, iface):
+        p = Popen(['sudo', 'ifup',
+                   iface],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        print r
+
+    @classmethod
+    def restart(cls, service=None, do_print=False):
+        '''
+        Restart the webserver
+        '''
+        service = service or "apache2"
+        p = Popen(['sudo', 'service',
+                   service,
+                   'restart'],
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  stderr=PIPE)
+        _output, _err = p.communicate()
+        r = p.returncode
+        if r == 0:
+            if do_print:
+                print "Service %s restarted" % service
+        else:
+            if do_print:
+                print _err
+
 
 class WebserverConfig(object):
 
@@ -548,23 +602,5 @@ class WebserverConfig(object):
                 print "Failed to create key and certificate: %i" % r
                 sys.exit(r)
 
-    def restart(self, service=None, do_print=False):
-        '''
-        Restart the webserver
-        '''
-        service = service or "apache2"
-        p = Popen(['sudo', 'service',
-                   service,
-                   'restart'],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
-        if r == 0:
-            if do_print:
-                print "Service %s restarted" % service
-        else:
-            if do_print:
-                print _err
+
 
