@@ -50,9 +50,11 @@ class OSMenu(object):
         bt = "Operating System"
         while 1:
             code, tags = self.d.menu("Operating System",
-                                     choices=[("reboot system", ""),
-                                              ("shutdown system", ""),
-                                              ("Set password of piadmin", "")
+                                     choices=[("system information", ""),
+                                              ("network configuration", ""),
+                                              ("set password of piadmin", ""),
+                                              ("reboot system", ""),
+                                              ("shutdown system", "")
                                              ],
                                      backtitle=bt)
 
@@ -66,8 +68,73 @@ class OSMenu(object):
                     self.d.msgbox("Shutting down the system.")
                 elif tags.startswith("Set password"):
                     self.os.set_password("piadmin")
+                elif tags.startswith("system information"):
+                    self.system_information()
+                elif tags.startswith("network configuration"):
+                    self.network_configuration()
             else:
                 break
+
+    def system_information(self):
+        diskspace = self.os.get_diskfree()
+        network = self.os.get_network()
+        self.d.scrollbox("""
+Free Disk Space
+===============
+
+%s
+
+Network
+=======
+
+IP address: %s
+Netmask   : %s
+Nameserver: %s
+Gateway   : %s
+""" % (diskspace, network.get("ip"),
+       network.get("netmask"),
+       network.get("nameserver"),
+       network.get("gateway")), width=60, height=20)
+
+    def network_configuration(self):
+        bt = "Network configuration"
+        network = self.os.get_network()
+        code, r = self.d.inputbox("Please enter the IP address",
+                                  width=60,
+                                  init=network.get("ip"))
+        if code is not self.d.DIALOG_OK:
+            return
+        network["ip"] = r
+        code, r = self.d.inputbox("Please enter the Netmask",
+                                  width=60,
+                                  init=network.get("netmask"))
+        if code is not self.d.DIALOG_OK:
+            return
+        network["netmask"] = r
+        code, r = self.d.inputbox("Please enter the Gateway",
+                                  width=60,
+                                  init=network.get("gateway"))
+        if code is not self.d.DIALOG_OK:
+            return
+        network["gateway"] = r
+        code, r = self.d.inputbox("Please enter the Nameserver",
+                                  width=60,
+                                  init=network.get("nameserver"))
+        if code is not self.d.DIALOG_OK:
+            return
+        network["nameserver"] = r
+        code = self.d.yesno("Are these values ok - and shall I activate the "
+                            "new network configuration? \n"
+                            "%s/%s\n"
+                            "Gateway: %s\n"
+                            "Nameserver: %s" %
+                            (network.get("ip"), network.get("netmask"),
+                             network.get("gateway"), network.get("nameserver")),
+                            width=60)
+        if code == self.d.DIALOG_OK:
+            pass
+            # TODO: Activate the IP address
+
 
 class WebserverMenu(object):
 
@@ -131,7 +198,6 @@ class WebserverMenu(object):
         if code == self.d.DIALOG_OK:
             self.webserver.restart()
             self.data_changed = False
-
 
     def enable(self):
         nginx, uwsgi = self.WebserverConfig.is_active()

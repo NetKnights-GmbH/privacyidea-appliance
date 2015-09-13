@@ -19,15 +19,12 @@ import os
 import time
 import string
 from stat import ST_SIZE, ST_MTIME
-from subprocess import call
 import re
 import sys
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
-import crypt
-import random
+from .networkparser.networkparser import NetworkParser
 from os import urandom
-import fileinput
 import socket
 from subprocess import Popen, PIPE, call
 
@@ -353,6 +350,9 @@ class FreeRADIUSConfig(object):
 
 class OSConfig(object):
 
+    def __init__(self):
+        self.np = NetworkParser()
+
     def reboot(self, echo=False):
         """
         Reboot OS
@@ -404,6 +404,14 @@ class OSConfig(object):
             if echo:
                 print _err
 
+    def get_diskfree(self):
+        return ""
+
+    def get_network(self):
+        return self.np.get_interfaces().get("eth0")
+
+    def set_network(self, ip, netmask, dns, gateway):
+        pass
 
 class WebserverConfig(object):
 

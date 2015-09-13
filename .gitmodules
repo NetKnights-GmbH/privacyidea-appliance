@@ -4,3 +4,6 @@
 [submodule "authappliance/lib/freeradiusparser"]
 	path = authappliance/lib/freeradiusparser
 	url = https://github.com/privacyidea/freeradiusparser
+[submodule "authappliance/lib/networkparser"]
+	path = authappliance/lib/networkparser
+	url = git@github.com:privacyidea/networkparser.git
