@@ -24,9 +24,11 @@ import sys
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
 from .networkparser.networkparser import NetworkParser
+from .mysqlparser.mysqlparser import MySQLParser
 from os import urandom
 import socket
 from subprocess import Popen, PIPE, call
+import ConfigParser
 
 DATABASE = "privacyidea"
 DBUSER = "privacyidea"
@@ -218,8 +220,8 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         return self.config.get("PI_LOGLEVEL")
     
     def set_loglevel(self, level):
-        if level not in ["logging.DEBUG", "logging.INFO", "logging.WARN",
-                         "logging.ERROR"]:
+        if level not in ["logging.DEBUG", "logging.INFO",
+                         "logging.WARN", "logging.ERROR"]:
             raise Exception("Invalid loglevel specified")
         self.config["PI_LOGLEVEL"] = level
 
@@ -255,6 +257,15 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
             print "written enckey: %s" % enckey
             return True, enckey
         return False, enckey
+
+    def get_DB(self):
+        return self.config.get("SQLALCHEMY_DATABASE_URI")
+
+    def DB_init(self):
+        r = call("/usr/bin/pi-manage createdb", shell=True)
+        if r == 0:
+            print("Created database")
+        return True
 
 
 class FreeRADIUSConfig(object):
@@ -405,6 +416,7 @@ class OSConfig(object):
                 print _err
 
     def get_diskfree(self):
+        # TODO: get the disk size
         return ""
 
     def get_network(self):
@@ -601,6 +613,32 @@ class WebserverConfig(object):
             else:
                 print "Failed to create key and certificate: %i" % r
                 sys.exit(r)
+
+
+class MySQLConfig(object):
+
+    def __init__(self, config_file="/etc/mysql/my.cnf"):
+        """
+        Config Object for MySQL Configuration
+
+        :param config_file: The MySQL config file
+        """
+        self.config = MySQLParser()
+
+    def is_redundant(self):
+        """
+        Check if we have a redundant setup
+
+        :return: True or False
+        """
+        bind_address = self.config.get_dict("mysqld", "bind-address")
+        server_id = self.config.get_dict("mysqld", "server-id")
+        if bind_address == "127.0.0.1" or not server_id:
+            ret = False, bind_address, server_id
+        else:
+            ret = True, bind_address, server_id
+
+        return ret
 
 
 

@@ -27,12 +27,15 @@ from dialog import Dialog
 from authappliance.lib.appliance import (Backup,
                            FreeRADIUSConfig,
                            PrivacyIDEAConfig,
-                           WebserverConfig, OSConfig,
+                           WebserverConfig, OSConfig, MySQLConfig,
                            DEFAULT_CONFIG)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
 from privacyidea.app import create_app
+from netaddr import IPAddress
+from paramiko.client import SSHClient
+from paramiko import SSHException, AutoAddPolicy, SFTPClient, Transport
 
 
 DESCRIPTION = __doc__
@@ -157,7 +160,8 @@ class WebserverMenu(object):
             #                             ],
             #                         backtitle=bt)
             code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("restart services", "")
+                                     choices=[("restart services", ""),
+                                              ("create new certificates", "")
                                               ],
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
@@ -222,6 +226,151 @@ class WebserverMenu(object):
             elif tags == "disable":
                 self.WebserverConfig.disable()
                 self.data_changed = True
+
+
+class Peer(object):
+
+        def __init__(self, dialog, ip=None, password=None):
+            self.ip = ip
+            self.password = password
+            self.d = dialog
+            self.ssh = SSHClient()
+
+        def get_peer_data(self):
+            bt = "Add another SQL Master"
+            code, ip = self.d.inputbox(
+                "Enter the IP Address of the other privacyIDEA server.",
+                backtitle=bt)
+
+            if code != self.d.DIALOG_OK:
+                return False
+
+            try:
+                self.ip = IPAddress(ip)
+            except:
+                self.d.msgbox("Invalid IP address")
+                return False
+
+            code, password = self.d.passwordbox(
+                "Enter the root password of the other machine.",
+                backtitle=bt)
+
+            if code != self.d.DIALOG_OK:
+                return False
+
+            self.password = password
+            return True
+
+        def setup_redundancy(self):
+            transport = Transport((str(self.ip), 22))
+            transport.connect(username="root", password=self.password)
+            # TODO: Do all the magic!
+            sftp = SFTPClient.from_transport(transport)
+            sftp.put("/etc/privacyidea/pi.cfg", "/root/pi.cfg")
+            sftp.close()
+            transport.close()
+
+
+
+
+class DBMenu(object):
+
+    def __init__(self, app, dialog, pConfig):
+        self.app = app
+        self.d = dialog
+        self.pConfig = pConfig
+        self.db = MySQLConfig()
+        self.peer = Peer(self.d)
+
+    def menu(self):
+        bt = "Configure the database connection"
+        while 1:
+            current_config = self.pConfig.get_DB()
+            code, tags = self.d.menu(
+                "The current database configuration string is %s" % current_config,
+                choices=[("init tables", "create missing tables"),
+                         ("view redundancy", ""),
+                         ("setup redundancy", "")],
+                backtitle=bt)
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("init"):
+                    self.db_init()
+                elif tags.startswith("view"):
+                    self.redundancy()
+                elif tags.startswith("setup"):
+                    if self.peer.get_peer_data():
+                        # Now we need to check, if the remote machine is
+                        # running privacyIDEA and MySQL.
+                        try:
+                            self.peer.ssh.set_missing_host_key_policy(
+                                AutoAddPolicy())
+                            self.peer.ssh.connect(str(self.peer.ip),
+                                               username="root",
+                                               password=self.peer.password)
+                            stdin, stdout, stderr = self.peer.ssh.exec_command(
+                                'dpkg -l privacyidea-apache2')
+                            output_pi = stdout.read()
+                            error_pi = stderr.read()
+
+                            stdin, stdout, stderr = self.peer.ssh.exec_command(
+                                'dpkg -l mysql-server')
+                            output_mysql = stdout.read()
+                            error_mysql = stderr.read()
+                            self.peer.ssh.close()
+                            if not output_mysql:
+                                self.d.msgbox(
+                                    "MySQL server not installed on {0!s}. "
+                                    "Please install mysql-server.".format(
+                                    self.peer.ip))
+                                break
+                            if not output_pi:
+                                self.d.msgbox(
+                                    "privacyIDEA not installed on "
+                                    "{0!s}. Please install "
+                                    "privacyidea-apache2.".format(
+                                    self.peer.ip))
+                                break
+                        except SSHException as exx:
+                            self.d.msgbox("{0!s}".format(exx))
+
+                        code = self.d.yesno(
+                            "OK. privacyIDEA and MySQL is installed on the "
+                            "remote server. We are ready to setup redundancy. "
+                            "Data will be cloned to the remote server. All "
+                            "privacyIDEA data on the remote server will be "
+                            "lost. Shall we proceed?", width=60)
+                        if code != self.d.DIALOG_OK:
+                            break
+                        else:
+                            self.peer.setup_redundancy()
+
+            else:
+                break
+
+    def redundancy(self):
+        r, bind, server_id = self.db.is_redundant()
+        self.d.scrollbox(
+"""
+Master-Master replication active: {active!s}
+Server ID: {server_id!s}
+Bind Address: {bind_address!s}
+""".format(active=r, bind_address=bind, server_id=server_id),
+            width=60, height=20)
+
+    def db_init(self):
+        db_connect = self.pConfig.get_DB()
+        code = self.d.yesno("Do you want to recreate the tables? "
+                            "Existing data will not be lost. Only new tables "
+                            "in the database scheme will be created on %s" %
+                            db_connect,
+                            width=70,
+                            backtitle="Create database tables")
+        if code == self.d.DIALOG_OK:
+            r = self.pConfig.DB_init()
+            if r:
+                self.d.msgbox("Created database tables.")
+            else:
+                self.d.scrollbox("Error creating database tables.")
 
 
 
@@ -551,25 +700,35 @@ class MainMenu(object):
             self.config_file = config
         else:
             self.config_file = DEFAULT_CONFIG
-            
-        self.pConfig = PrivacyIDEAConfig(self.config_file)
+
+        try:
+            self.pConfig = PrivacyIDEAConfig(self.config_file)
+        except IOError:
+            sys.stderr.write("="*75)
+            sys.stderr.write("\nCan not access {0!s}. You need to have read "
+                             "and write access to this "
+                             "file.\n".format(self.config_file))
+            sys.exit(5)
 
         self.app = create_app(config_name="production")
         self.d = Dialog(dialog="dialog")
         self.radiusDialog = RadiusMenu(self.app, self.d)
         self.backupDialog = BackupMenu(self.app, self.d)
+        self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
         self.osDialog = OSMenu(self.app, self.d)
 
     def main_menu(self):
-        choices=[("privacyIDEA", "",
-                  "Configure privacyIDEA application "
-                  "stuff like administrators.")
-                  ]
+        choices = [("privacyIDEA", "",
+                    "Configure privacyIDEA application "
+                    "stuff like administrators.")
+                   ]
         if self.radiusDialog.RadiusConfig:
             choices.append(("FreeRADIUS", "",
                             "Configure RADIUS settings like "
                             "the RADIUS clients."))
+        choices.append(("Database", "",
+                        "Configure database and setup redundancy"))
         choices.append(("Webserver", "",
                         "Restart Webserver and manage certificate."))
         choices.append(("Backup and Restore", "",
@@ -596,6 +755,8 @@ class MainMenu(object):
                     self.webserverDialog.menu()
                 elif tags.startswith("Operating"):
                     self.osDialog.menu()
+                elif tags.startswith("Database"):
+                    self.dbDialog.menu()
                     
             else:
                 # End
@@ -605,192 +766,60 @@ class MainMenu(object):
     
     def privacyidea_menu(self):
         while 1:
-            code, tags = self.d.menu("Configure privacyidea",
-                                     choices=[("view config",
-                                               "",""),
-                                              ("initialize ini-file",
-                                               "",
-                                               "Create a new ini-file with "
-                                               "default values."),
-                                              ("loglevel",
-                                               "",
-                                               ""),
-                                              ("admin realms", "", ""),
-                                              ("manage local admins", "", ""),
-                                              ("encryption key", "", ""),
-                                              ("signing key", "", "")],                                     
-                                     menu_height=22,
-                                     backtitle="privacyIDEA configuration",
-                                     item_help=1)
+            code, tags = self.d.menu(
+                "Configure privacyidea",
+                choices=[("view config", "Display configuration.",""),
+                         ("loglevel", "Change log level.", ""),
+                         ("admin realms", "Modify admin realms.", ""),
+                         ("manage local admins", "Modify admins.", ""),
+                         ("Danger zone!", "Enter at your own risk!",
+                                          "Here you may recreated your "
+                                          "encryption and signing keys.")],
+                menu_height=22,
+                backtitle="privacyIDEA configuration",
+                item_help=1)
         
             if code == self.d.DIALOG_OK:
                 if tags.startswith("loglevel"):
                     self.privacyidea_loglevel()
                 elif tags.startswith("view"):
                     self.privacyidea_view()
-                elif tags.startswith("initialize"):
-                    self.privacyidea_initialize()
                 elif tags.startswith("admin realms"):
                     self.privacyidea_adminrealms()
-                elif tags.startswith("admin file"):
-                    self.privacyidea_adminfile()
                 elif tags.startswith("manage local admins"):
                     self.privacyidea_admins()
+                elif tags.startswith("Danger zone"):
+                    self.privacyidea_danger_menu()
+            else:
+                break
+
+    def privacyidea_danger_menu(self):
+        while 1:
+            code, tags = self.d.menu(
+                "privacyIDEA Danger Zone",
+                choices=[("initialize pi.cfg-file",
+                          "Create new pi.cfg-file.",
+                          "This will also create new salt and pepper. Admins "
+                          "will not be able to login anymore!"),
+                         ("encryption key", "Create new encryption key.",
+                          "Token seeds can not be decrypted anymore!"),
+                         ("signing key", "Create new audit signing key.",
+                          "Old audit entries can not be verified anymore.")],
+                menu_height=22,
+                backtitle="privacyIDEA Danger Zone",
+                item_help=1)
+
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("initialize"):
+                    self.privacyidea_initialize()
                 elif tags.startswith("encryption"):
                     self.privacyidea_enckey()
                 elif tags.startswith("signing"):
                     self.privacyidea_sign()
             else:
                 break
-       
-    def privacyidea_database(self):
-        bt = "Configure the database connection"
-        while 1:
-            current_config = self.pConfig.get_DB()
-            code, tags = self.d.menu("The current database configuration "
-                                     "string is %s" % current_config,
-                                     choices=[("reset locally",
-                                               "let privacyidea recreate the config"),
-                                              ("init tables", "create tables"),
-                                              ("---", "-------------------"),
-                                              ("type",
-                                               "set the driver like mysql or psql"),
-                                              ("user",
-                                               "set the database user"),
-                                              ("password",
-                                               "set the database password"),
-                                              ("host",
-                                               "set the database host"),
-                                              ("name",
-                                               "set the database name"),
-                                              ],
-                                     backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("reset"):
-                    self.privacyidea_db_reset()
-                elif tags.startswith("init"):
-                    self.privacyidea_db_init()
-                elif tags.startswith("type"):
-                    self.privacyidea_db_type()
-                elif tags.startswith("user"):
-                    self.privacyidea_db_user()
-                elif tags.startswith("password"):
-                    self.privacyidea_db_password()
-                elif tags.startswith("host"):
-                    self.privacyidea_db_host()
-                elif tags.startswith("name"):
-                    self.privacyidea_db_name()
-            else:
-                break
-            
-    def privacyidea_db_init(self):
-        db_connect = self.pConfig.get_DB()
-        code = self.d.yesno("Do you want to recreate the tables? "
-                            "Existing data will not be lost. Only new tables " 
-                            "in the database scheme will be created on %s" %
-                            db_connect,
-                            width=70,
-                            backtitle="Create database tables")
-        if code == self.d.DIALOG_OK:
-            r, out = self.pConfig.DB_init()
-            if r:
-                self.d.msgbox("Created database tables.")
-            else:
-                self.d.scrollbox("Error creating database tables: %s" % out)
-        
-    def privacyidea_db_reset(self):
-        code = self.d.yesno("Do you want to reset the database configuration? "
-                            "This will create a new user on the locally "
-                            "running mysql server.",
-                            backtitle="Reset database configuration",
-                            defaultno=1)
-        if code == self.d.DIALOG_OK:
-            res, dbconfig = self.pConfig.DB_create()
-            if res:
-                self.pConfig.set_DB({"type": "mysql",
-                                     "host": "localhost",
-                                     "user": dbconfig[1],
-                                     "password": dbconfig[2],
-                                     "database": dbconfig[0]})
-                self.pConfig.save()
-                self.data_changed = True
-                r, out = self.pConfig.DB_init()
-                if r:
-                    self.d.msgbox("Database created.")
-                else:
-                    self.d.scrollbox("Error creating database tables: %s" % out)
-            else:
-                self.d.scrollbox("Failed to create database.\n %s" % dbconfig)
-        
-        
-    def privacyidea_db_type(self):
-        db_connect = self.pConfig.get_DB()
-        try:
-            dialect = db_connect.split(":")[0]
-        except IndexError:
-            dialect = mysql
-        
-        code, tags = self.d.radiolist("Select the database dialect you want "
-                                "the token data to be stored at (%s)" %
-                                db_connect,
-                                choices=[("mysql", "",
-                                          int(dialect=="mysql")),
-                                         ("sqlite", "",
-                                          int(dialect=="sqlite")),
-                                         ("postgresql", "",
-                                          int(dialect=="postgresql")),
-                                         ("postgtresql+psycopg2", "",
-                                          int(dialect=="postgtresql+psycopg2")),
-                                         ("oracle", "",
-                                          int(dialect=="oracle"))],
-                                backtitle="Select database dialect")
-        
-        if code == self.d.DIALOG_OK:
-            self.pConfig.set_DB({"type" : tags})
-            self.pConfig.save()
-            self.data_changed = True
-        
-    def privacyidea_db_user(self):
-        db_dict = self.pConfig.get_DB_dict()
-        code, tags = self.d.inputbox("Enter the name of the database user",
-                                     init=db_dict.get("user") or "",
-                                     backtitle="Configure database connection")
-        if code == self.d.DIALOG_OK:
-            self.pConfig.set_DB({"user": tags})
-            self.pConfig.save()
-            self.data_changed = True
-    
-    
-    def privacyidea_db_password(self):
-        db_dict = self.pConfig.get_DB_dict()
-        code, tags = self.d.inputbox("Enter the password of the database user",
-                                     init=db_dict.get("password") or "",
-                                     backtitle="Configure database connection")
-        if code == self.d.DIALOG_OK:
-            self.pConfig.set_DB({"password": tags})
-            self.pConfig.save()
-            self.data_changed = True
-    
-    def privacyidea_db_host(self):
-        db_dict = self.pConfig.get_DB_dict()
-        code, tags = self.d.inputbox("Enter the hostname of the database",
-                                     init=db_dict.get("host") or "",
-                                     backtitle="Configure database connection")
-        if code == self.d.DIALOG_OK:
-            self.pConfig.set_DB({"host": tags})
-            self.pConfig.save()
-            self.data_changed = True
-    
-    def privacyidea_db_name(self):
-        db_dict = self.pConfig.get_DB_dict()
-        code, tags = self.d.inputbox("Enter the name of the database",
-                                     init=db_dict.get("database") or "",
-                                     backtitle="Configure database connection")
-        if code == self.d.DIALOG_OK:
-            self.pConfig.set_DB({"database": tags})
-            self.pConfig.save()
-            self.data_changed = True
-            
+
+
     def privacyidea_admins(self):
         while 1:
             with self.app.app_context():
@@ -924,30 +953,25 @@ class MainMenu(object):
                 self.d.msgbox("Successfully created new audit keys %s." %
                               f)
             else:
-                self.d.msgbox("Failed to create new audit keys %s!" %
-                              f)
+                self.d.msgbox("Failed to create new audit keys %s!" % f)
         
     def privacyidea_loglevel(self):
         loglevel = self.pConfig.get_loglevel()
-        code, tags = self.d.radiolist("choose a loglevel",
-                                      choices=[("logging.DEBUG", "",
-                                                int(loglevel
-                                                    == "logging.DEBUG")),
-                                               ("logging.INFO", "",
-                                                int(loglevel ==
-                                                    "logging.INFO")),
-                                               ("logging.WARN", "Warnings",
-                                                int(loglevel ==
-                                                    "logging.WARN")),
-                                               ("logging.ERROR", "",
-                                                int(loglevel
-                                                     == "logging.ERROR"))],
-                                      backtitle="privacyIDEA loglevel.")
+        code, tags = self.d.radiolist(
+            "choose a loglevel",
+            choices=[("logging.DEBUG", "Excessive logging.",
+                      int(loglevel == "logging.DEBUG")),
+                     ("logging.INFO", "Normal logging.",
+                      int(loglevel == "logging.INFO")),
+                     ("logging.WARN", "Only log warnings.",
+                      int(loglevel == "logging.WARN")),
+                     ("logging.ERROR", "Sparse logging.",
+                      int(loglevel == "logging.ERROR"))],
+            backtitle="privacyIDEA loglevel.")
         if code == self.d.DIALOG_OK:
             self.pConfig.set_loglevel(tags)
             self.pConfig.save()
             self.data_changed = True
-
 
     def privacyidea_view(self):
         text = """

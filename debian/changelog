@@ -1,4 +1,4 @@
-pi-appliance (2.0~dev3) trusty; urgency=low
+pi-appliance (2.0~dev4) trusty; urgency=low
 
   * init
   * sudo

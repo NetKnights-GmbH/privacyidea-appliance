@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #VERSION = "1.5dev9"
-VERSION = "2.0dev3"
+VERSION = "2.0dev4"
 from setuptools import setup, find_packages
 import os
 import sys
