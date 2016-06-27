@@ -640,5 +640,12 @@ class MySQLConfig(object):
 
         return ret
 
+    def get(self, section=None, key=None):
+        return self.config.get_dict(section=section, key=key)
+
+    def set(self, section, key, value):
+        
+
+
 
 

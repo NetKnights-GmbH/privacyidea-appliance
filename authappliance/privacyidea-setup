@@ -230,46 +230,70 @@ class WebserverMenu(object):
 
 class Peer(object):
 
-        def __init__(self, dialog, ip=None, password=None):
-            self.ip = ip
-            self.password = password
-            self.d = dialog
-            self.ssh = SSHClient()
+    files = ["/etc/privacyidea/enckey", "/etc/privacyidea/pi.cfg",
+             "/etc/privacyidea/logging.cfg",
+             "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
 
-        def get_peer_data(self):
-            bt = "Add another SQL Master"
-            code, ip = self.d.inputbox(
-                "Enter the IP Address of the other privacyIDEA server.",
-                backtitle=bt)
+    def __init__(self, dialog, pConfig, dbConfig, ip=None, password=None):
+        self.ip = ip
+        self.password = password
+        self.d = dialog
+        self.pConfig = pConfig
+        self.dbConfig = dbConfig
+        self.ssh = SSHClient()
 
-            if code != self.d.DIALOG_OK:
-                return False
+    def get_peer_data(self):
+        bt = "Add another SQL Master"
+        code, ip = self.d.inputbox(
+            "Enter the IP Address of the other privacyIDEA server.",
+            backtitle=bt)
 
-            try:
-                self.ip = IPAddress(ip)
-            except:
-                self.d.msgbox("Invalid IP address")
-                return False
+        if code != self.d.DIALOG_OK:
+            return False
 
-            code, password = self.d.passwordbox(
-                "Enter the root password of the other machine.",
-                backtitle=bt)
+        try:
+            self.ip = IPAddress(ip)
+        except:
+            self.d.msgbox("Invalid IP address")
+            return False
 
-            if code != self.d.DIALOG_OK:
-                return False
+        code, password = self.d.passwordbox(
+            "Enter the root password of the other machine.",
+            backtitle=bt)
 
-            self.password = password
-            return True
+        if code != self.d.DIALOG_OK:
+            return False
 
-        def setup_redundancy(self):
-            transport = Transport((str(self.ip), 22))
-            transport.connect(username="root", password=self.password)
-            # TODO: Do all the magic!
-            sftp = SFTPClient.from_transport(transport)
-            sftp.put("/etc/privacyidea/pi.cfg", "/root/pi.cfg")
-            sftp.close()
-            transport.close()
+        self.password = password
+        return True
 
+    def setup_redundancy(self):
+        #
+        # Copy files in /etc/privacyidea
+        #
+        self.d.infobox("copying files to remote server...")
+        transport = Transport((str(self.ip), 22))
+        transport.connect(username="root", password=self.password)
+        sftp = SFTPClient.from_transport(transport)
+        for file in self.files:
+            sftp.put(file, file)
+        sftp.close()
+        transport.close()
+        #
+        # Setup my.cnf
+        #
+        self.d.infobox("Setup my.cnf on local server...")
+        pass
+        self.d.infobox("Setup my.cnf on remote server...")
+        self.dbConfig.
+        server - id = 1
+        log_bin = / var / log / mysql / mysql - bin.log
+        binlog_do_db = example
+        #
+        # Configuring mysql
+        #
+        self.d.infobox("Configuring MySQL on local server...")
+        self.d.infobox("Configuring MySQL on remote server...")
 
 
 
@@ -280,7 +304,7 @@ class DBMenu(object):
         self.d = dialog
         self.pConfig = pConfig
         self.db = MySQLConfig()
-        self.peer = Peer(self.d)
+        self.peer = Peer(self.d, self.pConfig, self.db)
 
     def menu(self):
         bt = "Configure the database connection"
@@ -332,6 +356,7 @@ class DBMenu(object):
                                 break
                         except SSHException as exx:
                             self.d.msgbox("{0!s}".format(exx))
+                            break
 
                         code = self.d.yesno(
                             "OK. privacyIDEA and MySQL is installed on the "
