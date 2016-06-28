@@ -28,7 +28,6 @@ from .mysqlparser.mysqlparser import MySQLParser
 from os import urandom
 import socket
 from subprocess import Popen, PIPE, call
-import ConfigParser
 
 DATABASE = "privacyidea"
 DBUSER = "privacyidea"
@@ -458,14 +457,14 @@ class OSConfig(object):
         print r
 
     @classmethod
-    def restart(cls, service=None, do_print=False):
+    def restart(cls, service=None, do_print=False, action="restart"):
         '''
         Restart the webserver
         '''
         service = service or "apache2"
         p = Popen(['sudo', 'service',
                    service,
-                   'restart'],
+                   action],
                   stdin=PIPE,
                   stdout=PIPE,
                   stderr=PIPE)
@@ -473,7 +472,7 @@ class OSConfig(object):
         r = p.returncode
         if r == 0:
             if do_print:
-                print "Service %s restarted" % service
+                print "Service %s %s" % (service, action)
         else:
             if do_print:
                 print _err
@@ -644,7 +643,12 @@ class MySQLConfig(object):
         return self.config.get_dict(section=section, key=key)
 
     def set(self, section, key, value):
-        
+        config = self.get()
+        config[section][key] = value
+        self.config.save(config, "/etc/mysql/my.cnf")
+
+    def restart(self):
+        call("service mysql restart", shell=True)
 
 
 
