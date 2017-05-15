@@ -27,7 +27,8 @@ from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
-                                         DEFAULT_CONFIG)
+                                         DEFAULT_CONFIG,
+                                         CRON_USER, AUDIT_CMD, BACKUP_CMD)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
@@ -39,6 +40,7 @@ from subprocess import Popen, PIPE
 import random
 import os
 from tempfile import NamedTemporaryFile
+
 
 
 DESCRIPTION = __doc__
@@ -565,8 +567,8 @@ class AuditMenu(object):
             cronjobs = self.Audit.get_cronjobs()
             choices = [("Add new rotate check date", "")]
             for cronjob in cronjobs:
-                if cronjob.user == "privacyidea" and \
-                        cronjob.command.startswith("pi-manage rotate_audit"):
+                if cronjob.user == CRON_USER and \
+                        cronjob.command.startswith(AUDIT_CMD):
                     comment = "audit rotation"
                     if cronjob.minute != "*":
                         comment = "hourly audit rotation."
@@ -602,6 +604,35 @@ class AuditMenu(object):
         Add an audit rotation
         '''
         bt = "Add a new Audit rotation"
+        age = ""
+        watermark = ""
+
+        code, typ = self.d.menu("You can either rotate the audit log by age "
+                                "or by the number of log entries:",
+                                choices=[("by age",
+                                          "Audit entries older than certain days will be deleted."),
+                                         ("by entries",
+                                          "If the number of entries exceed "
+                                          "the highwatermark, the entries "
+                                          "will be deleted to lowwatermark")],
+                                width=70, backtitle=bt)
+        if code != self.d.DIALOG_OK:
+            return
+
+        if typ.startswith("by age"):
+            code, age = self.d.inputbox("Number of days how old the oldest "
+                                        "log entry should be:",
+                                        width=70,
+                                        backtitle=bt)
+        else:
+            code, watermark = self.d.inputbox("Please enter <highwatermark>,"
+                                               "<lowwatermark>.",
+                                        width=70,
+                                        backtitle=bt)
+
+        if code != self.d.DIALOG_OK:
+            return
+
         code, bdate = self.d.inputbox("The date to run the audit rotation. "
                                       "Please enter it like this: "
                                       "<Minute>  <Hour>  <Day-of-Month> "
@@ -630,7 +661,8 @@ class AuditMenu(object):
                 date_fragments.append('*')
             else:
                 return
-            params = None
+            params = {"age": age,
+                      "watermark": watermark}
             self.Audit.add_rotate(date_fragments, params)
 
     def delete(self, tag):
@@ -684,8 +716,8 @@ class BackupMenu(object):
             cronjobs = self.Backup.get_cronjobs()
             choices = [("Add new backup date", "")]
             for cronjob in cronjobs:
-                if cronjob.user == "privacyidea" and \
-                        cronjob.command.startswith("pi-manage backup"):
+                if cronjob.user == CRON_USER and \
+                        cronjob.command.startswith(BACKUP_CMD):
                     comment = "backup job."
                     if cronjob.minute != "*":
                         comment = "hourly backup job."

@@ -65,8 +65,23 @@ class Audit(object):
         :param params: 
         :return: 
         """
+        audit_cmd = AUDIT_CMD
         params = params or {}
-        self.CP.cronjobs.append(CronJob(AUDIT_CMD, dc[0], user=CRON_USER,
+        age = params.get("age")
+        watermark = params.get("watermark")
+        if watermark:
+            high, low = watermark.split(",")
+            high = int(high.strip())
+            low = int(low.strip())
+            if high < low:
+                high, low = low, high
+            audit_cmd += " --highwatermark {0!s} --lowwatermark " \
+                         "{1!s}".format(high, low)
+        else:
+            age = age or 180
+            audit_cmd += " --age {0!s} ".format(age)
+
+        self.CP.cronjobs.append(CronJob(audit_cmd, dc[0], user=CRON_USER,
                                         hour=dc[1], dom=dc[2], month=dc[3],
                                         dow=dc[4]))
         self.CP.save(CRONTAB)
