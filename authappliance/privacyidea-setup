@@ -46,102 +46,6 @@ DESCRIPTION = __doc__
 VERSION = "2.0"
 
 
-class OSMenu(object):
-
-    def __init__(self, app, dialog):
-        self.app = app
-        self.d = dialog
-        self.os = OSConfig()
-
-    def menu(self):
-        bt = "Operating System"
-        while 1:
-            code, tags = self.d.menu("Operating System",
-                                     choices=[("system information", ""),
-                                              ("network configuration", ""),
-                                              ("set password of piadmin", ""),
-                                              ("reboot system", ""),
-                                              ("shutdown system", "")
-                                             ],
-                                     backtitle=bt)
-
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("reboot"):
-                    self.os.reboot(echo=True)
-                    self.d.msgbox("Rebooting the system. Standby and wait for "
-                                  "the system come up again.")
-                elif tags.startswith("shutdown"):
-                    self.os.halt(echo=True)
-                    self.d.msgbox("Shutting down the system.")
-                elif tags.startswith("Set password"):
-                    self.os.set_password("piadmin")
-                elif tags.startswith("system information"):
-                    self.system_information()
-                elif tags.startswith("network configuration"):
-                    self.network_configuration()
-            else:
-                break
-
-    def system_information(self):
-        diskspace = self.os.get_diskfree()
-        network = self.os.get_network()
-        self.d.scrollbox("""
-Free Disk Space
-===============
-
-%s
-
-Network
-=======
-
-IP address: %s
-Netmask   : %s
-Nameserver: %s
-Gateway   : %s
-""" % (diskspace, network.get("address"),
-       network.get("netmask"),
-       network.get("dns-nameservers"),
-       network.get("gateway")), width=60, height=20)
-
-    def network_configuration(self):
-        bt = "Network configuration"
-        network = self.os.get_network()
-        code, r = self.d.inputbox("Please enter the IP address",
-                                  width=60,
-                                  init=network.get("address"))
-        if code is not self.d.DIALOG_OK:
-            return
-        network["address"] = r
-        code, r = self.d.inputbox("Please enter the Netmask",
-                                  width=60,
-                                  init=network.get("netmask"))
-        if code is not self.d.DIALOG_OK:
-            return
-        network["netmask"] = r
-        code, r = self.d.inputbox("Please enter the Gateway",
-                                  width=60,
-                                  init=network.get("gateway"))
-        if code is not self.d.DIALOG_OK:
-            return
-        network["gateway"] = r
-        code, r = self.d.inputbox("Please enter the Nameserver",
-                                  width=60,
-                                  init=network.get("dns-nameservers"))
-        if code is not self.d.DIALOG_OK:
-            return
-        network["dns-nameservers"] = r
-        code = self.d.yesno("Are these values ok - and shall I activate the "
-                            "new network configuration? \n"
-                            "%s/%s\n"
-                            "Gateway: %s\n"
-                            "Nameserver: %s" %
-                            (network.get("address"), network.get("netmask"),
-                             network.get("gateway"), network.get(
-                                "dns-nameservers")),
-                            width=60)
-        if code == self.d.DIALOG_OK:
-            self.os.set_network(network)
-
 
 class WebserverMenu(object):
 
@@ -1028,7 +932,6 @@ class MainMenu(object):
         self.backupDialog = BackupMenu(self.app, self.d)
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
-        self.osDialog = OSMenu(self.app, self.d)
 
     def main_menu(self):
         choices = [("privacyIDEA", "",
@@ -1047,8 +950,7 @@ class MainMenu(object):
                         "Backup or Restore of privacyIDEA"
                         "configuration and database and"
                         "RADIUS clients."))
-        choices.append(("Operating System", "",
-                        "Configure SSH and Login settings for the OS."))
+
         while 1:
             code, tags = self.d.menu("Which subject do you want to configure?",
                                      choices=choices,
@@ -1065,8 +967,6 @@ class MainMenu(object):
                     self.backupDialog.menu()
                 elif tags.startswith("Webserver"):
                     self.webserverDialog.menu()
-                elif tags.startswith("Operating"):
-                    self.osDialog.menu()
                 elif tags.startswith("Database"):
                     self.dbDialog.menu()
                     
