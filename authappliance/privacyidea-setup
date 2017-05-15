@@ -24,11 +24,10 @@ import argparse
 import sys
 import time
 from dialog import Dialog
-from authappliance.lib.appliance import (Backup,
-                           FreeRADIUSConfig,
-                           PrivacyIDEAConfig,
-                           WebserverConfig, OSConfig, MySQLConfig,
-                           DEFAULT_CONFIG)
+from authappliance.lib.appliance import (Backup, FreeRADIUSConfig,
+                                         PrivacyIDEAConfig,
+                                         OSConfig, MySQLConfig,
+                                         DEFAULT_CONFIG)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
@@ -36,7 +35,7 @@ from privacyidea.app import create_app
 from netaddr import IPAddress
 from paramiko.client import SSHClient
 from paramiko import SSHException, AutoAddPolicy, SFTPClient, Transport
-from subprocess import Popen, PIPE, call
+from subprocess import Popen, PIPE
 import random
 import os
 from tempfile import NamedTemporaryFile
@@ -53,7 +52,6 @@ class WebserverMenu(object):
         self.app = app
         self.os = OSConfig()
         self.d = dialog
-        self.webserver = WebserverConfig()
 
     def menu(self):
         bt = "Webservice configuration"
@@ -68,42 +66,14 @@ class WebserverMenu(object):
             #                             ],
             #                         backtitle=bt)
             code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("restart services", ""),
-                                              ("create new certificates", "")
+                                     choices=[("restart services", "")
                                               ],
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
-                if tags.startswith("enable"):
-                    self.enable()
-                elif tags == "create new certificates":
-                    self.certificate()
-                elif tags.startswith("webservices"):
-                    self.services()
-                elif tags.startswith("restart"):
+                if tags.startswith("restart"):
                     self.restart()
             else:
                 break
-
-    def certificate(self):
-        code = self.d.yesno("This will overwrite the existing "
-                            "certificate. Create new?",
-                            backtitle="Create webserver certificate",
-                            defaultno=1)
-        if code == self.d.DIALOG_OK:
-            self.WebserverConfig.create_certificates()
-            self.data_changed = True
-
-
-    def services(self):
-        webservices = self.WebserverConfig.get_webservices()
-        code, tags = self.d.checklist("Enable nginx webservices. Only enable "
-                                      "'privacyidea' unless you exactly know, "
-                                      "what you are doing!",
-                                      choices=webservices,
-                                      backtitle="Enable webserives")
-        if code == self.d.DIALOG_OK:
-            self.WebserverConfig.enable_webservice(tags)
-            self.data_changed = True
 
     def restart(self):
         code = self.d.yesno("Do you want to restart the services for the "
@@ -111,29 +81,6 @@ class WebserverMenu(object):
         if code == self.d.DIALOG_OK:
             self.os.restart()
             self.data_changed = False
-
-    def enable(self):
-        nginx, uwsgi = self.WebserverConfig.is_active()
-
-        code, tags = self.d.radiolist("enable or disable the webservice",
-                                      choices=[("enable",
-                                                "privacyIDEA "
-                                                "will start automatically "
-                                                "at boot time",
-                                                int(nginx and uwsgi)),
-                                               ("disable",
-                                                "privacyIDEA "
-                                                "will not start automatically.",
-                                                int(not(nginx and uwsgi)))],
-                                      width=70,
-                                      backtitle="Enable or disable webservice")
-        if code == self.d.DIALOG_OK:
-            if tags == "enable":
-                self.WebserverConfig.enable()
-                self.data_changed = True
-            elif tags == "disable":
-                self.WebserverConfig.disable()
-                self.data_changed = True
 
 
 class Peer(object):
@@ -945,7 +892,7 @@ class MainMenu(object):
         choices.append(("Database", "",
                         "Configure database and setup redundancy"))
         choices.append(("Webserver", "",
-                        "Restart Webserver and manage certificate."))
+                        "Restart Webserver"))
         choices.append(("Backup and Restore", "",
                         "Backup or Restore of privacyIDEA"
                         "configuration and database and"
