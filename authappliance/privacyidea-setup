@@ -24,7 +24,7 @@ import argparse
 import sys
 import time
 from dialog import Dialog
-from authappliance.lib.appliance import (Backup, FreeRADIUSConfig,
+from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG)
@@ -536,6 +536,117 @@ Bind Address: {bind_address!s}
                 self.d.scrollbox("Error creating database tables.")
 
 
+class AuditMenu(object):
+
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+        self.Audit = Audit()
+
+    def menu(self):
+        bt = "Audit Log Rotation"
+        self.Audit.CP.read()
+        while 1:
+            code, tags = self.d.menu("Auditlog Rotate",
+                                     choices=[("Configure Audit Log", "")],
+                                     backtitle=bt)
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("Configure"):
+                    self.config()
+            else:
+                break
+
+    def config(self):
+        '''
+        Display the cronjobs of user privacyidea
+        '''
+        bt = "Define rotation times."
+        while 1:
+            cronjobs = self.Audit.get_cronjobs()
+            choices = [("Add new rotate check date", "")]
+            for cronjob in cronjobs:
+                if cronjob.user == "privacyidea" and \
+                        cronjob.command.startswith("pi-manage rotate_audit"):
+                    comment = "audit rotation"
+                    if cronjob.minute != "*":
+                        comment = "hourly audit rotation."
+                    if cronjob.hour != "*":
+                        comment = "daily audit rotation."
+                    if cronjob.dow != "*":
+                        comment = "weekly audit rotation."
+                    if cronjob.dom != "*":
+                        comment = "monthly audit rotation."
+                    if cronjob.month != "*":
+                        comment = "yearly audit rotation."
+                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
+                                                        cronjob.hour,
+                                                        cronjob.dom,
+                                                        cronjob.month,
+                                                        cronjob.dow),
+                                   comment))
+            code, tags = self.d.menu("Here you can define times, when "
+                                     "to run a audit rotation check.",
+                                     choices=choices,
+                                     backtitle=bt)
+
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("Add"):
+                    self.add()
+                else:
+                    self.delete(tags)
+            else:
+                break
+
+    def add(self):
+        '''
+        Add an audit rotation
+        '''
+        bt = "Add a new Audit rotation"
+        code, bdate = self.d.inputbox("The date to run the audit rotation. "
+                                      "Please enter it like this: "
+                                      "<Minute>  <Hour>  <Day-of-Month> "
+                                      " <Month>  <Day-of-Week>. You may"
+                                      " use '*' as wildcard entry.",
+                                      width=70,
+                                      backtitle=bt)
+
+        if code == self.d.DIALOG_OK:
+            date_fragments = bdate.split()
+            if len(date_fragments) == 5:
+                pass
+            elif len(date_fragments) == 4:
+                date_fragments.append('*')
+            elif len(date_fragments) == 3:
+                date_fragments.append('*')
+                date_fragments.append('*')
+            elif len(date_fragments) == 2:
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+            elif len(date_fragments) == 1:
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+                date_fragments.append('*')
+            else:
+                return
+            params = None
+            self.Audit.add_rotate(date_fragments, params)
+
+    def delete(self, tag):
+        '''
+        Delete the Audit rotation
+        '''
+        bt = "Delete an audit rotation"
+        (minute, hour, dom, month, dow) = tag.split()
+        code = self.d.yesno("Do you want to delete the audit rotation "
+                            "job at time %s:%s. "
+                            "Month:%s, Day of Month: %s, "
+                            "Day of week: %s?" %
+                            (hour, minute, month, dom, dow))
+        if code == self.d.DIALOG_OK:
+            # Delete backup job.
+            self.Audit.del_rotate(None, hour, minute, month, dom, dow)
 
 class BackupMenu(object):
 
@@ -547,6 +658,7 @@ class BackupMenu(object):
 
     def menu(self):
         bt = "Backup and Restore configuration"
+        self.Backup.CP.read()
         while 1:
             code, tags = self.d.menu("Backup and Restore",
                                      choices=[("Configure backup", ""),
@@ -572,7 +684,8 @@ class BackupMenu(object):
             cronjobs = self.Backup.get_cronjobs()
             choices = [("Add new backup date", "")]
             for cronjob in cronjobs:
-                if cronjob.user == "privacyidea":
+                if cronjob.user == "privacyidea" and \
+                        cronjob.command.startswith("pi-manage backup"):
                     comment = "backup job."
                     if cronjob.minute != "*":
                         comment = "hourly backup job."
@@ -879,6 +992,7 @@ class MainMenu(object):
         self.backupDialog = BackupMenu(self.app, self.d)
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
+        self.auditDialog = AuditMenu(self.app, self.d)
 
     def main_menu(self):
         choices = [("privacyIDEA", "",
@@ -897,6 +1011,9 @@ class MainMenu(object):
                         "Backup or Restore of privacyIDEA"
                         "configuration and database and"
                         "RADIUS clients."))
+        choices.append(("Audit Rotation", "",
+                        "Define times when to check if the Audit log should "
+                        "be rotated."))
 
         while 1:
             code, tags = self.d.menu("Which subject do you want to configure?",
@@ -916,6 +1033,8 @@ class MainMenu(object):
                     self.webserverDialog.menu()
                 elif tags.startswith("Database"):
                     self.dbDialog.menu()
+                elif tags.startswith("Audit"):
+                    self.auditDialog.menu()
                     
             else:
                 # End

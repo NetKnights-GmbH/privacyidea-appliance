@@ -38,11 +38,62 @@ RESTORE_CMD = "pi-manage backup restore %s"
 DEFAULT_CONFIG = "/etc/privacyidea/pi.cfg"
 BACKUP_DIR = "/var/lib/privacyidea/backup"
 BACKUP_CMD = "pi-manage backup create -d %s" % BACKUP_DIR
+AUDIT_CMD = "pi-manage rotate_audit "
 
 
 def generate_password(size=6, characters=string.ascii_lowercase +
                       string.ascii_uppercase + string.digits):
     return ''.join(urandom.choice(characters) for _x in range(size))
+
+
+class Audit(object):
+
+    def __init__(self):
+        self.CP = CronJobParser()
+
+    def get_cronjobs(self):
+        '''
+        Parse the cronjob and return the backup times
+        '''
+        return self.CP.cronjobs
+
+    def add_rotate(self, dc, params):
+        """
+        Add a new audit rotate cron job
+        :param dc: date components
+        :type dc: list 
+        :param params: 
+        :return: 
+        """
+        params = params or {}
+        self.CP.cronjobs.append(CronJob(AUDIT_CMD, dc[0], user=CRON_USER,
+                                        hour=dc[1], dom=dc[2], month=dc[3],
+                                        dow=dc[4]))
+        self.CP.save(CRONTAB)
+
+
+    def del_rotate(self, type, hour, minute, month, dom, dow):
+        """        
+        :param type: 
+         
+        :return: 
+        """
+        jobs_num = len(self.CP.cronjobs)
+        i = jobs_num - 1
+        while i >= 0:
+            cronjob = self.CP.cronjobs[i]
+            if (cronjob.hour == hour and
+                        cronjob.minute == minute and
+                        cronjob.dom == dom and
+                        cronjob.month == month and
+                        cronjob.dow == dow and
+                        cronjob.user == CRON_USER and
+                    cronjob.command.startswith(AUDIT_CMD)):
+                self.CP.cronjobs.pop(i)
+            i -= 1
+
+        if len(self.CP.cronjobs) != jobs_num:
+            self.CP.save(CRONTAB)
 
 
 class Backup(object):
@@ -124,7 +175,8 @@ class Backup(object):
                 cronjob.dom == dom and
                 cronjob.month == month and
                 cronjob.dow == dow and
-                cronjob.user == CRON_USER):
+                cronjob.user == CRON_USER and
+                cronjob.command.startswith(BACKUP_CMD)):
                 self.CP.cronjobs.pop(i)
             i -= 1
             
