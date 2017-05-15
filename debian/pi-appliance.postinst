@@ -11,30 +11,33 @@ if [ -f /usr/share/dbconfig-common/dpkg/postinst.pgsql  ]; then
   . /usr/share/dbconfig-common/dpkg/postinst.pgsql
 fi
 
-function create_admin {
-	useradd piadmin -m -G root,adm --shell /usr/bin/privacyidea-setup || true
-	# The admin needs access to all PI information:
-	# Thus the group root needs access
-	chmod -R g+rw /etc/privacyidea
-	# if the user exist, we set the shell and groups
-	chsh -s /usr/bin/privacyidea-setup piadmin
-	adduser piadmin root	
-}
+# We do not want a piadmin. This might change the original system too much
+#
+#function create_admin {
+#	useradd piadmin -m -G root,adm --shell /usr/bin/privacyidea-setup || true
+#	# The admin needs access to all PI information:
+#	# Thus the group root needs access
+#	chmod -R g+rw /etc/privacyidea
+#	# if the user exist, we set the shell and groups
+#	chsh -s /usr/bin/privacyidea-setup piadmin
+#	adduser piadmin root	
+#}
 
 case "$1" in
 
   configure)
 	mkdir -p /var/lib/privacyidea/backup
-	create_admin
-	chown -R privacyidea /var/lib/privacyidea
-	chgrp -R root /var/lib/privacyidea
-	chmod -R g+rw /var/lib/privacyidea
-	# set crontab access rights
-	chmod 664 /etc/crontab
-
-	# set rights on network/interfaces
-	chgrp root /etc/network/interfaces
-	chmod 664 /etc/network/interfaces
+# As we have no piadmin, we do not need to change anything
+#	create_admin
+#	chown -R privacyidea /var/lib/privacyidea
+#	chgrp -R root /var/lib/privacyidea
+#	chmod -R g+rw /var/lib/privacyidea
+#	# set crontab access rights
+#	chmod 664 /etc/crontab
+#
+#	# set rights on network/interfaces
+#	chgrp root /etc/network/interfaces
+#	chmod 664 /etc/network/interfaces
   ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)

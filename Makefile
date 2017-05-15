@@ -10,11 +10,11 @@ info:
 	@echo "make translate    - translate WebUI"
 	
 #VERSION=1.3~dev5
-VERSION=2.0~dev4
-SERIES="trusty precise vivid"
-LOCAL_SERIES=`lsb_release -a | grep Codename | cut -f2`
+VERSION=2.0~dev5
 SRCDIRS=authappliance
 SRCFILES=setup.py Makefile Changelog LICENSE requirements.txt
+LOCAL_SERIES=`lsb_release -a | grep Codename | cut -f2`
+
 
 clean:
 	find . -name \*.pyc -exec rm {} \;
@@ -40,7 +40,10 @@ builddeb:
 	make debianize
 	################## Renew the changelog
 	cp -r debian/* DEBUILD/pi-appliance.org/debian/
-	sed -e s/"trusty) trusty; urgency"/"$(LOCAL_SERIES)) $(LOCAL_SERIES); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
+	sed -e s/"xenial) xenial; urgency"/"$(LOCAL_SERIES)) $(LOCAL_SERIES); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
+
 	################# Build
 	(cd DEBUILD/pi-appliance.org; debuild --no-lintian)
 
+git-update:
+	git submodule update --recursive --remote

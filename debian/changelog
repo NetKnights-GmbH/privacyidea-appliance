@@ -1,3 +1,10 @@
+pi-appliance (2.0~dev5) xenial; urgency=low
+
+  * change to xenial
+  * do not use pi-admin
+
+ -- Cornelius Kölbel <cornelius.koelbel@netknights.it>  Mon, 15 May 2017 12:15:00 +0200
+
 pi-appliance (2.0~dev4) trusty; urgency=low
 
   * init
