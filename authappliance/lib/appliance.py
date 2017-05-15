@@ -34,10 +34,10 @@ DBUSER = "privacyidea"
 POOL = "./0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 CRONTAB = "/etc/crontab"
 CRON_USER = "privacyidea"
-RESTORE_CMD = "pi-manage.py backup restore %s"
+RESTORE_CMD = "pi-manage backup restore %s"
 DEFAULT_CONFIG = "/etc/privacyidea/pi.cfg"
 BACKUP_DIR = "/var/lib/privacyidea/backup"
-BACKUP_CMD = "pi-manage.py backup create -d %s" % BACKUP_DIR
+BACKUP_CMD = "pi-manage backup create -d %s" % BACKUP_DIR
 
 
 def generate_password(size=6, characters=string.ascii_lowercase +
