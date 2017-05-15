@@ -647,6 +647,12 @@ class MySQLConfig(object):
         config[section][key] = value
         self.config.save(config, "/etc/mysql/my.cnf")
 
+    def delete(self, section, key):
+        config = self.get()
+        if key in config.get(section):
+            del config[section][key]
+            self.config.save(config, "/etc/mysql/my.cnf")
+
     def restart(self):
         call("service mysql restart", shell=True)
 

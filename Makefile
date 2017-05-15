@@ -8,8 +8,6 @@ info:
 	@echo "make builddeb     - build .deb file locally on ubuntu 14.04LTS!"
 	@echo "make venvdeb      - build .deb file, that contains the whole setup in a virtualenv."
 	@echo "make translate    - translate WebUI"
-	@echo "                    This is to be used with debian Wheezy"
-	@echo "make ppa-dev      - upload to launchpad development repo"
 	
 #VERSION=1.3~dev5
 VERSION=2.0~dev4
@@ -45,24 +43,4 @@ builddeb:
 	sed -e s/"trusty) trusty; urgency"/"$(LOCAL_SERIES)) $(LOCAL_SERIES); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
 	################# Build
 	(cd DEBUILD/pi-appliance.org; debuild --no-lintian)
-
-ppa:
-	cp debian/changelog DEBUILD/pi-appliance.org/debian/
-	sed -e s/"trusty) trusty; urgency"/"$(series)) $(series); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
-	################# Build
-	(cd DEBUILD/pi-appliance.org; debuild -sa -S)
-	 ################ Upload to launchpad:
-	dput ppa:privacyidea/appliance DEBUILD/pi-appliance_${VERSION}*_source.changes
-
-ppa-dev:
-	################### Check for the series
-	@echo "You need to specify a parameter series like $(SERIES)"
-	echo $(SERIES) | grep $(series)
-	################## Renew the changelog
-	cp debian/changelog DEBUILD/pi-appliance.org/debian/
-	sed -e s/"trusty) trusty; urgency"/"$(series)) $(series); urgency"/g debian/changelog > DEBUILD/pi-appliance.org/debian/changelog
-	################# Build
-	(cd DEBUILD/pi-appliance.org; debuild -sa -S)
-	################ Upload to launchpad:
-	dput ppa:privacyidea/appliance-dev DEBUILD/pi-appliance_${VERSION}*_source.changes
 
