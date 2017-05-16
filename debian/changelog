@@ -1,4 +1,4 @@
-pi-appliance (2.0~dev6) xenial; urgency=low
+pi-appliance (2.0~dev7) xenial; urgency=low
 
   * change to xenial
   * do not use pi-admin
