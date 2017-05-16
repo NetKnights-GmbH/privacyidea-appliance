@@ -29,9 +29,9 @@ case "$1" in
 	mkdir -p /var/lib/privacyidea/backup
 # As we have no piadmin, we do not need to change anything
 #	create_admin
-#	chown -R privacyidea /var/lib/privacyidea
-#	chgrp -R root /var/lib/privacyidea
-#	chmod -R g+rw /var/lib/privacyidea
+	chown -R privacyidea /var/lib/privacyidea
+	chgrp -R root /var/lib/privacyidea
+	chmod -R g+rw /var/lib/privacyidea
 #	# set crontab access rights
 #	chmod 664 /etc/crontab
 #
