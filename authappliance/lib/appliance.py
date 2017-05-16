@@ -23,7 +23,6 @@ import re
 import sys
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
-from .networkparser.networkparser import NetworkParser
 from .mysqlparser.mysqlparser import MySQLParser
 from os import urandom
 import socket
@@ -428,7 +427,7 @@ class FreeRADIUSConfig(object):
 class OSConfig(object):
 
     def __init__(self):
-        self.np = NetworkParser()
+        pass
 
     def reboot(self, echo=False):
         """
@@ -484,22 +483,6 @@ class OSConfig(object):
     def get_diskfree(self):
         # TODO: get the disk size
         return ""
-
-    def get_network(self):
-        return self.np.get_interfaces().get("eth0").get("options")
-
-    def set_network(self, options):
-        """
-        This sets the network of eth0
-
-        :param options: keys: address, netmask, dns-nameservers, gateway
-        :return:
-        """
-        self.np.interfaces.get("eth0")["options"] = options
-        self.np.save()
-        self.ifdown("eth0")
-        self.ifup("eth0")
-
 
     @classmethod
     def ifdown(cls, iface):
