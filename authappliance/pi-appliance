@@ -1284,7 +1284,7 @@ class MainMenu(object):
             self.data_changed = True
 
     def privacyidea_view(self):
-        text = """
+        text = u"""
     The secret key file             : %s
     List of the admin realms        : %s
     Loglevel                        : %s
