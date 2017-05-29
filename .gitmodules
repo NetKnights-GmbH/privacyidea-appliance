@@ -6,7 +6,7 @@
 	url = https://github.com/privacyidea/freeradiusparser
 [submodule "authappliance/lib/networkparser"]
 	path = authappliance/lib/networkparser
-	url = git@github.com:privacyidea/networkparser.git
+	url = https://github.com/privacyidea/networkparser.git
 [submodule "authappliance/lib/mysqlparser"]
 	path = authappliance/lib/mysqlparser
 	url = https://github.com/privacyidea/mysqlparser.git
