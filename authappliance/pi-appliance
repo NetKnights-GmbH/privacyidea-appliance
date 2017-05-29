@@ -25,6 +25,7 @@ import sys
 import time
 from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
+                                         ApacheConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG,
@@ -54,28 +55,82 @@ class WebserverMenu(object):
         self.app = app
         self.os = OSConfig()
         self.d = dialog
+        self.apache = ApacheConfig()
 
     def menu(self):
         bt = "Webservice configuration"
         while 1:
-            # TODO: Add more webserver tasks
-            #code, tags = self.d.menu("Configure Webserver",
-            #                         choices=[("enable or disable
-            ## webserver", ""),
-            #                                  ("webservices", ""),
-            #                                  ("create new certificates", ""),
-            #                                  ("restart services", "")
-            #                             ],
-            #                         backtitle=bt)
             code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("restart services", "")
+                                     choices=[("restart services", ""),
+                                              ("Generate selfsigned "
+                                               "certificate", ""),
+                                              ("Generate Certificate "
+                                               "Signing Request", ""),
+                                              ("Import certificate", ""),
+                                              ("-" * 40, ""),
+                                              ("Regenerate private key", "")
                                               ],
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("restart"):
                     self.restart()
+                if tags.startswith("Regenerate private"):
+                    self.generate_private_key()
+                if tags.startswith("Generate self"):
+                    self.generate_self()
+                if tags.startswith("Generate Certificate"):
+                    self.generate_csr()
+                if tags.startswith("Import"):
+                    self.import_certificate()
             else:
                 break
+
+    def generate_self(self):
+        code = self.d.yesno("Do you want to recreate the self signed "
+                            "certificate?")
+        if code == self.d.DIALOG_OK:
+            self.apache.create_self_signed()
+
+    def generate_private_key(self):
+        code, tags = self.d.menu("Regenerate private key. "
+                                 "When regenerating the private key you also "
+                                 "need a new certificate! "
+                                 "Do not regenerate the private key while "
+                                 "you are waiting for a certificate signing "
+                                 "request to be signed. In this case "
+                                 "the certificate will not match the "
+                                 "private key anymore.",
+                                 choices=[("2048", "2048 bit"),
+                                          ("4096", "4096 bit"),
+                                          ("8192", "8192 bit")],
+                                 backtitle="Regenerate private key")
+        if code == self.d.DIALOG_OK:
+            self.apache.create_private_key(tags)
+
+    def generate_csr(self):
+        csr = self.apache.generate_csr()
+        f = open(csr, "r")
+        csr_content = f.read()
+        f.close()
+        # TODO: We should be able to copy and paste here
+        self.d.inputbox("CSR", init=csr_content, width=70, height=20)
+        code = self.d.msgbox("The certificate signing request is written "
+                             "to {0}. Do not regenerate the private "
+                             "key after you have sent the CSR to your "
+                             "certificate authority. {1}".format(csr,
+                                                                 csr_content),
+                             width=70, height=20)
+
+    def import_certificate(self):
+        cert, keyfile = self.apache.get_certificates()
+        # TODO: We should be able to copy and paste here
+
+        code = self.d.editbox(cert,
+                              title="Edit certificate file {0}".format(cert),
+                              width=70, height=20)
+
+
+
 
     def restart(self):
         code = self.d.yesno("Do you want to restart the services for the "
@@ -1153,7 +1208,6 @@ class MainMenu(object):
             
     def privacyidea_admin_manage(self, admin_name):
         bt = "Manage administrator"
-        # TODO: We might also want to change the email of the admin
         code, tags = self.d.menu("Manage admin %s" % admin_name,
                                  choices=[("Delete admin", ""),
                                           ("Change password", "")],

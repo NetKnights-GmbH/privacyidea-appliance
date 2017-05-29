@@ -18,7 +18,7 @@
 import os
 import time
 import string
-from stat import ST_SIZE, ST_MTIME
+from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
@@ -526,6 +526,77 @@ class OSConfig(object):
         else:
             if do_print:
                 print _err
+
+
+class ApacheConfig(object):
+
+    def __init__(self, filename=None):
+        self.filename = filename or \
+                        "/etc/apache2/sites-enabled/privacyidea.conf"
+
+    def get_certificates(self):
+        '''
+        return a tuple of the certificate and the private key
+        '''
+        cert = None
+        key = None
+        f = open(self.filename, "r")
+        content = f.read()
+        f.close()
+
+        for l in content.split("\n"):
+            m = re.match("\s*SSLCertificateKeyFile\s*(.*)", l)
+            if m:
+                key = m.group(1)
+            m = re.match("\s*SSLCertificateFile\s*(.*)", l)
+            if m:
+                cert = m.group(1)
+
+        return cert, key
+
+    def create_private_key(self, keysize=4096):
+        cert, keyfile = self.get_certificates()
+        os.chmod(keyfile, S_IWUSR)
+        command = ("openssl genrsa -out {1} {0!s}".format(keysize, keyfile))
+        print(command)
+        r = call(command, shell=True)
+        if r == 0:
+            print("Created a new private key")
+            os.chmod(keyfile, S_IRUSR)
+        else:
+            print("Failed to create private key")
+            sys.exit(r)
+
+    def create_self_signed(self, hostname=None, days=1000):
+        hostname = hostname or socket.getfqdn()
+        cert, keyfile = self.get_certificates()
+        print("Generating SSL certificate {0}".format(cert))
+        command = ("openssl req -x509 -new -key "
+                   "{key} -days {days} -subj /CN={hostname} -out "
+                   "{cert}".format(key=keyfile, cert=cert, days=days,
+                                   hostname=hostname))
+        r = call(command, shell=True)
+        if r == 0:
+            print "Created the self signed certificate"
+        else:
+            print "Failed to create self signed certificate: %i" % r
+            sys.exit(r)
+
+    def generate_csr(self, hostname=None):
+        hostname = hostname or socket.getfqdn()
+        cert, keyfile = self.get_certificates()
+        csr = "{0}.csr".format(cert)
+        print("Generating CSR {0}".format(csr))
+        command = ("openssl req -new -key "
+                   "{key} -subj /CN={hostname} -out "
+                   "{csr}".format(key=keyfile, csr=csr, hostname=hostname))
+        r = call(command, shell=True)
+        if r == 0:
+            print "Created the CSR."
+        else:
+            print "Failed to create CSR: %i" % r
+            sys.exit(r)
+        return csr
 
 
 class WebserverConfig(object):
