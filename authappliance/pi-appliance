@@ -62,8 +62,10 @@ class WebserverMenu(object):
         while 1:
             code, tags = self.d.menu("Configure Webserver",
                                      choices=[("restart services", ""),
+                                              ("-" * 40, ""),
                                               ("Generate selfsigned "
                                                "certificate", ""),
+                                              ("-" * 40, ""),
                                               ("Generate Certificate "
                                                "Signing Request", ""),
                                               ("Import certificate", ""),
@@ -109,28 +111,41 @@ class WebserverMenu(object):
 
     def generate_csr(self):
         csr = self.apache.generate_csr()
-        f = open(csr, "r")
-        csr_content = f.read()
-        f.close()
-        # TODO: We should be able to copy and paste here
-        self.d.inputbox("CSR", init=csr_content, width=70, height=20)
         code = self.d.msgbox("The certificate signing request is written "
-                             "to {0}. Do not regenerate the private "
+                             "to {0}. \nCopy this file and pass it to your "
+                             "certificate authority for getting it signed. \n"
+                             "Do not regenerate the private "
                              "key after you have sent the CSR to your "
-                             "certificate authority. {1}".format(csr,
-                                                                 csr_content),
-                             width=70, height=20)
+                             "certificate authority.".format(csr),
+                             width=70, height=10)
 
     def import_certificate(self):
         cert, keyfile = self.apache.get_certificates()
-        # TODO: We should be able to copy and paste here
+        homedir = os.getenv("HOME")
+        code = self.d.msgbox("You received a signed certificate from a "
+                             "certificate authority. Copy this file to the "
+                             "directory \n{0}.\n"
+                             "In the following dialog you may choose, "
+                             "which certificate you want to use for your "
+                             "webserver.".format(homedir),
+                             width=70, height=10)
 
-        code = self.d.editbox(cert,
-                              title="Edit certificate file {0}".format(cert),
-                              width=70, height=20)
-
-
-
+        bt = "Import certificate (.pem, .crt, .der, .cer)"
+        files = self.apache.get_imports(homedir)
+        choices = []
+        for bfile in sorted(files.keys()):
+            choices.append((bfile, "%s" % (files[bfile].get("time"))))
+        if len(choices) == 0:
+                self.d.msgbox("No certificate found!")
+        else:
+            code, tags = self.d.menu("Choose the certificate you want to "
+                                     "use for the webserver.",
+                                     choices=choices,
+                                     backtitle=bt,
+                                     width=78)
+            if code == self.d.DIALOG_OK:
+                self.apache.import_cert(homedir + "/" + tags, cert)
+                self.restart()
 
     def restart(self):
         code = self.d.yesno("Do you want to restart the services for the "

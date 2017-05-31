@@ -554,6 +554,53 @@ class ApacheConfig(object):
 
         return cert, key
 
+    def get_imports(self, homedir=None):
+        '''
+        Return a list of possible importable certificates in the directory 
+        homedir.
+        
+        :return: dict of certificates. Key is the filename, and
+                 "size" and "time"
+        '''
+        homedir = homedir or os.getenv("HOME")
+        files = {}
+        try:
+            allfiles = os.listdir(homedir)
+        except OSError:
+            return files
+
+        for f in allfiles:
+            if f[-4:].lower() in [".pem", ".crt", ".cer", ".der"]:
+                st = os.stat(homedir + "/" + f)
+                size = "%iMB" % (int(st[ST_SIZE]) / (1024 * 1024))
+                mtime = time.asctime(time.localtime(st[ST_MTIME]))
+                try:
+                    f = f.decode("ascii")
+                    files[f] = {"size": size,
+                                "time": mtime}
+                except UnicodeDecodeError:
+                    pass
+        return files
+
+    def import_cert(self, src, dst):
+        """
+        Copy the file from src to dst and convert it to PEM
+        :param src: 
+        :param dst: 
+        :return: 
+        """
+        r = call("openssl x509 -in {src} -out {dst} -outform PEM".format(
+            src=src, dst=dst), shell=True)
+        if r == 1:
+            # try DER
+            r = call("openssl x509 -in {src} -out {dst} -inform DER -outform "
+                     "PEM".format(src=src, dst=dst), shell=True)
+        if r == 0:
+            print("Copied the certificate file")
+        else:
+            print("Failed to copy certificate file: %s" % r)
+            sys.exit(r)
+
     def create_private_key(self, keysize=4096):
         cert, keyfile = self.get_certificates()
         os.chmod(keyfile, S_IWUSR)
@@ -585,7 +632,8 @@ class ApacheConfig(object):
     def generate_csr(self, hostname=None):
         hostname = hostname or socket.getfqdn()
         cert, keyfile = self.get_certificates()
-        csr = "{0}.csr".format(cert)
+        csr = "{homedir}/{filename}.csr".format(filename=os.path.basename(cert),
+                                               homedir=os.getenv("HOME"))
         print("Generating CSR {0}".format(csr))
         command = ("openssl req -new -key "
                    "{key} -subj /CN={hostname} -out "
