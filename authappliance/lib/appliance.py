@@ -21,9 +21,10 @@ import string
 from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
+
+from .mysqlparser import mysqlparser
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
-from .mysqlparser.mysqlparser import MySQLParser
 from os import urandom
 import socket
 from subprocess import Popen, PIPE, call
@@ -785,13 +786,13 @@ class WebserverConfig(object):
 
 class MySQLConfig(object):
 
-    def __init__(self, config_file="/etc/mysql/my.cnf"):
+    def __init__(self):
         """
         Config Object for MySQL Configuration
 
         :param config_file: The MySQL config file
         """
-        self.config = MySQLParser()
+        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf")
 
     def is_redundant(self):
         """
@@ -814,13 +815,13 @@ class MySQLConfig(object):
     def set(self, section, key, value):
         config = self.get()
         config[section][key] = value
-        self.config.save(config, "/etc/mysql/my.cnf")
+        self.config.save(config, )
 
     def delete(self, section, key):
         config = self.get()
         if key in config.get(section):
             del config[section][key]
-            self.config.save(config, "/etc/mysql/my.cnf")
+            self.config.save(config)
 
     def restart(self):
         call("service mysql restart", shell=True)

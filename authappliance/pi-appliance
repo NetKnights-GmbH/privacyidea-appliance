@@ -585,7 +585,7 @@ class DBMenu(object):
     def redundancy_status(self):
         r, bind, server_id = self.db.is_redundant()
         self.d.scrollbox(
-"""
+u"""
 Master-Master replication active: {active!s}
 Server ID: {server_id!s}
 Bind Address: {bind_address!s}
