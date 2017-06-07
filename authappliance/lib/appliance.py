@@ -22,6 +22,7 @@ from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
 
+from authappliance.lib.mysqlparser.mysqlparser import MySQLParser
 from .mysqlparser import mysqlparser
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
@@ -825,6 +826,36 @@ class MySQLConfig(object):
 
     def restart(self):
         call("service mysql restart", shell=True)
+
+class RemoteMySQLConfig(MySQLConfig):
+
+    def __init__(self, sftp):
+        """
+        Config Object for MySQL Configuration on a remote server, accessed via ssh
+
+        :param config_file: The MySQL config file
+        """
+        self.sftp = sftp
+
+        class _RemoteMySQLParser(MySQLParser):
+            def _read(self):
+                f = sftp.file(self.file)
+                self.content = f.read().decode('utf-8')
+                f.close()
+
+            def save(self, dict_config=None, outfile=None):
+                if dict_config:
+                    output = self.format(dict_config)
+                    f = sftp.file(outfile, 'w')
+                    for line in output.splitlines():
+                        f.write(line.encode('utf-8') + "\n")
+                    f.close()
+
+        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", _RemoteMySQLParser)
+
+    def restart(self):
+        raise NotImplementedError()
+
 
 
 

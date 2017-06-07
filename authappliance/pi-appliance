@@ -29,7 +29,7 @@ from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG,
-                                         CRON_USER, AUDIT_CMD, BACKUP_CMD)
+                                         CRON_USER, AUDIT_CMD, BACKUP_CMD, RemoteMySQLConfig)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
@@ -158,7 +158,6 @@ class WebserverMenu(object):
 class Peer(object):
 
     files = ["/etc/privacyidea/enckey", "/etc/privacyidea/pi.cfg",
-             "/etc/privacyidea/logging.cfg",
              "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
@@ -284,22 +283,32 @@ class Peer(object):
         for file in self.files:
             sftp.put(file, file)
         #
-        # Setup my.cnf
+        # Setup my.cnf, locally and remotely
         #
+        shared_my_cnf_values = {"auto_increment_increment": 2,
+                       "log_bin": "/var/log/mysql/mysql-bin.log",
+                       "binlog_do_db": "pi",
+                       "bind-address": "0.0.0.0"
+                       }
+        remote_my_cnf_values = {"server-id": 2,
+                         "auto_increment_offset": 2}
+        local_my_cnf_values = {"server-id": 1,
+                        "auto_increment_offset": 1}
+
+        self.add_info("Setup my.cnf on local server...")
+
+        for key, value in shared_my_cnf_values.items() + local_my_cnf_values.items():
+            self.dbConfig.set('mysqld', key, value)
+
         self.add_info("Setup my.cnf on remote server...")
-        self.dbConfig.set("mysqld", "server-id", 2)
-        self.dbConfig.set("mysqld", "auto_increment_increment", 2)
-        self.dbConfig.set("mysqld", "auto_increment_offset", 2)
-        self.dbConfig.set("mysqld", "log_bin", "/var/log/mysql/mysql-bin.log")
-        self.dbConfig.set("mysqld", "binlog_do_db", "pi")
-        self.dbConfig.set("mysqld", "bind-address", "0.0.0.0")
-        sftp.put("/etc/mysql/my.cnf", "/etc/mysql/my.cnf")
+
+        remote_my_cnf = RemoteMySQLConfig(sftp)
+        for key, value in shared_my_cnf_values.items() + remote_my_cnf_values.items():
+            remote_my_cnf.set('mysqld', key, value)
+
         sftp.close()
         transport.close()
 
-        self.add_info("Setup my.cnf on local server...")
-        self.dbConfig.set("mysqld", "server-id", 1)
-        self.dbConfig.set("mysqld", "auto_increment_offset", 1)
         #
         # Restart services
         #
@@ -492,7 +501,7 @@ slave start;
         self.ssh.exec_command("service apache2 start")
         self.add_info("\nRedundant setup complete.")
 
-        self.d.scrollbox(self.info, height=20, width=60)
+        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
 
 
 
