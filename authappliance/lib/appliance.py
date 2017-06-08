@@ -835,7 +835,7 @@ class RemoteMySQLConfig(MySQLConfig):
         :param config_file: The MySQL config file
         """
         self.sftp = sftp
-        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", sftp)
+        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", sftp.file)
 
     def restart(self):
         raise NotImplementedError()
