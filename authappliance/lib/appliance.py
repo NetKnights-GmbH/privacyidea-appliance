@@ -835,22 +835,7 @@ class RemoteMySQLConfig(MySQLConfig):
         :param config_file: The MySQL config file
         """
         self.sftp = sftp
-
-        class _RemoteMySQLParser(MySQLParser):
-            def _read(self):
-                f = sftp.file(self.file)
-                self.content = f.read().decode('utf-8')
-                f.close()
-
-            def save(self, dict_config=None, outfile=None):
-                if dict_config:
-                    output = self.format(dict_config)
-                    f = sftp.file(outfile, 'w')
-                    for line in output.splitlines():
-                        f.write(line.encode('utf-8') + "\n")
-                    f.close()
-
-        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", _RemoteMySQLParser)
+        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", sftp)
 
     def restart(self):
         raise NotImplementedError()
