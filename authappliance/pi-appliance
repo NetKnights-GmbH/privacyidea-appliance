@@ -157,7 +157,7 @@ class WebserverMenu(object):
 
 class Peer(object):
 
-    files = ["/etc/privacyidea/enckey", "/etc/privacyidea/pi.cfg",
+    files = ["/etc/privacyidea/enckey",
              "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
@@ -271,6 +271,28 @@ class Peer(object):
         self.add_info("done.")
         self.d.scrollbox(self.info, height=20, width=60)
 
+    def _execute_local_sql(self, sql, maintainer_password):
+        p = Popen(['mysql', '--user=debian-sys-maint',
+                   '--password={0}'.format(maintainer_password)],
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        output, err = p.communicate(sql)
+        if err:
+            self.add_info("====== ERROR =======")
+            self.add_info(err)
+        return output, err
+
+    def _execute_remote_sql(self, sql, maintainer_password):
+        stdin, stdout, stderr = self.ssh.exec_command(
+            "echo \"{statement}\" | mysql --user=debian-sys-maint --password={maintainer_pw}".format(
+                statement=sql,
+                maintainer_pw=maintainer_password))
+        err = stderr.read()
+        if err:
+            self.add_info("====== ERROR =======")
+            self.add_info(err)
+        output = stdout.read()
+        return output, err
+
     def setup_redundancy(self):
         #
         # Copy files in /etc/privacyidea
@@ -282,6 +304,14 @@ class Peer(object):
         sftp = SFTPClient.from_transport(transport)
         for file in self.files:
             sftp.put(file, file)
+
+        # set relevant remote privacyIDEA options
+        remote_config = PrivacyIDEAConfig(DEFAULT_CONFIG, opener=sftp.file)
+        local_config = PrivacyIDEAConfig(DEFAULT_CONFIG)
+        remote_config.config['PI_PEPPER'] = local_config.config['PI_PEPPER']
+        remote_config.config['SUPERUSER_REALM'] = local_config.config['SUPERUSER_REALM']
+        remote_config.save()
+
         #
         # Setup my.cnf, locally and remotely
         #
@@ -352,6 +382,17 @@ class Peer(object):
         else:
             maintainer_password2 = output.strip()
 
+        # Add the replication users on both machines
+        self.add_info("Drop replication user on local machine...")
+        self._execute_local_sql("drop user if exists 'replicator'@'%';", maintainer_password)
+        self._execute_local_sql("create user 'replicator'@'%' identified by '{}';".format(replicator_password),
+                                maintainer_password)
+
+        self.add_info("Drop replication user on remote machine...")
+        # Drop user
+        _ ,err = self._execute_remote_sql("drop user if exists 'replicator'@'%'", maintainer_password2)
+        self._execute_remote_sql("create user 'replicator'@'%' identified by '{}';".format(replicator_password),
+                                maintainer_password2)
         #
         # dump it and copy it to the other server
         #
@@ -397,12 +438,7 @@ class Peer(object):
         #
         # Get the position on server1
         #
-        p = Popen(['mysql', '--user=debian-sys-maint',
-                   '--password={0}'.format(maintainer_password)],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        output, err = p.communicate(input="show master status;")
+        output, err = self._execute_local_sql("show master status;", maintainer_password)
         r = p.returncode
         if r == 0:
             self.add_info(output)
@@ -414,22 +450,11 @@ class Peer(object):
                     self.add_info("Local File:     {0}".format(self.file_local))
                     self.add_info("Local Position: {0}".format(
                         self.position_local))
-        else:
-            self.add_info("====== ERROR =======")
-            self.add_info(err)
 
         self.add_info("Configuring MySQL on remote server...")
         # clean up the old database
-        stdin, stdout, stderr = self.ssh.exec_command(
-            "echo 'show master status;' "
-            "| mysql --user=debian-sys-maint "
-            "--password={0}".format(maintainer_password2))
-        output = stdout.read()
+        output, _ = self._execute_remote_sql('show master status;', maintainer_password2)
         self.add_info(output)
-        err = stderr.read()
-        if err:
-            self.add_info("======== ERROR ========")
-            self.add_info(err)
         for line in output.split("\n"):
             elems = line.split()
             if len(elems) > 2 and elems[2] == "pi":
@@ -439,62 +464,36 @@ class Peer(object):
                 self.add_info("Remote Position: {0}".format(
                     self.position_remote))
 
-        self.add_info("Drop replication user on remote machine...")
-        # Drop user
-        stdin, stdout, stderr = self.ssh.exec_command(
-            "echo \"drop user 'replicator'@'%';\""
-            "| mysql --user=debian-sys-maint "
-            "--password={0}".format(maintainer_password2))
-        err = stderr.read()
-        if err:
-            self.add_info("ERROR: {0}".format(err))
-            self.add_info("       This maybe due to the fact, that the user "
-                          "did not exist, yet.")
+
 
         # create everything remote
         self.add_info("Add replication on remote server...")
-        stdin, stdout, stderr = self.ssh.exec_command(
-        """echo \"create user 'replicator'@'%' identified by '{replicator_password}';
-grant replication slave on *.* to 'replicator'@'%';
-slave stop;
-CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator', MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position};
-slave start;\" | mysql --user=debian-sys-maint --password={maintainer_pw}
-""".format(replicator_password=replicator_password,
-           local_file=self.file_local,
-           local_position=self.position_local,
-           local_ip=self.local_ip,
-           maintainer_pw=maintainer_password2)
-        )
-        err = stderr.read()
-        if err:
-            self.add_info("ERROR: {0}".format(err))
+        self._execute_remote_sql("""
+            grant replication slave on *.* to 'replicator'@'%';
+            stop slave;
+            CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator', MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position};
+            start slave;""".format(
+                replicator_password=replicator_password,
+                local_file=self.file_local,
+                local_position=self.position_local,
+                local_ip=self.local_ip),
+            maintainer_password2)
+
         #
         #  Configure replication on LOCAL host
         #
-        self.add_info("Add replication user on local server...")
-        p = Popen(['mysql', '--user=debian-sys-maint',
-                   '--password={0}'.format(maintainer_password)],
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
 
-        p.communicate("drop user 'replicator'@'%';")
 
-        p = Popen(['mysql', '--user=debian-sys-maint',
-                   '--password={0}'.format(maintainer_password)],
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        output, err = p.communicate(
-            input="""
-create user 'replicator'@'%' identified by '{replicator_password}';
+        self._execute_local_sql("""
 grant replication slave on *.* to 'replicator'@'%';
-slave stop;
+stop slave;
 CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
     MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE =
     '{remote_file}', MASTER_LOG_POS = {remote_position};
-slave start;
+start slave;
 """.format(replicator_password=replicator_password, remote_ip=self.remote_ip,
-           remote_file=self.file_remote, remote_position=self.position_remote))
-        if p.returncode:
-            self.add_info("ERROR: {0!s}".format(err))
-
+           remote_file=self.file_remote, remote_position=self.position_remote),
+                                maintainer_password)
         self.add_info("Starting local webserver")
         self.os.restart(service="apache2", action="start")
         self.add_info("Starting remote webserver")
