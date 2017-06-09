@@ -350,14 +350,16 @@ class Peer(object):
                                        range(random.randrange(21,31))])
 
         # Add the replication users on both machines
-        self.add_info("Drop replication user on local machine...")
+        self.add_info("Drop and add replication user on local machine...")
         self._execute_local_sql("drop user if exists 'replicator'@'%';")
-        self._execute_local_sql("create user 'replicator'@'%' identified by '{}';".format(replicator_password))
+        self._execute_local_sql("""create user 'replicator'@'%' identified by '{}';
+                                 grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
 
-        self.add_info("Drop replication user on remote machine...")
+        self.add_info("Drop and add replication user on remote machine...")
         # Drop user
         _ ,err = self._execute_remote_sql("drop user if exists 'replicator'@'%'")
-        self._execute_remote_sql("create user 'replicator'@'%' identified by '{}';".format(replicator_password))
+        self._execute_remote_sql("""create user 'replicator'@'%' identified by '{}';
+                                 grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
         #
         # dump it and copy it to the other server
         #
@@ -430,9 +432,9 @@ class Peer(object):
         # create everything remote
         self.add_info("Add replication on remote server...")
         self._execute_remote_sql("""
-            grant replication slave on *.* to 'replicator'@'%';
             stop slave;
-            CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator', MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position};
+            CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator',
+            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position};
             start slave;""".format(
                 replicator_password=replicator_password,
                 local_file=self.file_local,
@@ -442,17 +444,17 @@ class Peer(object):
         #
         #  Configure replication on LOCAL host
         #
-
-
         self._execute_local_sql("""
-grant replication slave on *.* to 'replicator'@'%';
-stop slave;
-CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
-    MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE =
-    '{remote_file}', MASTER_LOG_POS = {remote_position};
-start slave;
-""".format(replicator_password=replicator_password, remote_ip=self.remote_ip,
-           remote_file=self.file_remote, remote_position=self.position_remote))
+            stop slave;
+            CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
+            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{remote_file}', MASTER_LOG_POS = {remote_position};
+            start slave;""".format(
+                replicator_password=replicator_password,
+                remote_ip=self.remote_ip,
+                remote_file=self.file_remote,
+                remote_position=self.position_remote))
+        self.add_info("Add replication on local server...")
+
         self.add_info("Starting local webserver")
         self.os.restart(service="apache2", action="start")
         self.add_info("Starting remote webserver")
