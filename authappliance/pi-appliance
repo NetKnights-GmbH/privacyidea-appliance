@@ -444,6 +444,7 @@ class Peer(object):
         #
         #  Configure replication on LOCAL host
         #
+        self.add_info("Add replication on local server...")
         self._execute_local_sql("""
             stop slave;
             CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
@@ -453,7 +454,6 @@ class Peer(object):
                 remote_ip=self.remote_ip,
                 remote_file=self.file_remote,
                 remote_position=self.position_remote))
-        self.add_info("Add replication on local server...")
 
         self.add_info("Starting local webserver")
         self.os.restart(service="apache2", action="start")
