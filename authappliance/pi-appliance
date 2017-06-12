@@ -157,7 +157,7 @@ class WebserverMenu(object):
 
 class Peer(object):
 
-    files = ["/etc/privacyidea/enckey",
+    files = ["/etc/privacyidea/enckey", "/etc/privacyidea/logging.cfg",
              "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
@@ -282,13 +282,20 @@ class Peer(object):
         transport.connect(username="root", password=self.password)
         sftp = SFTPClient.from_transport(transport)
         for file in self.files:
-            sftp.put(file, file)
+            if os.path.exists(file):
+                sftp.put(file, file)
 
-        # set relevant remote privacyIDEA options
+        # adjust remote pi.cfg
         remote_config = PrivacyIDEAConfig(DEFAULT_CONFIG, opener=sftp.file)
         local_config = PrivacyIDEAConfig(DEFAULT_CONFIG)
-        remote_config.config['PI_PEPPER'] = local_config.config['PI_PEPPER']
-        remote_config.config['SUPERUSER_REALM'] = local_config.config['SUPERUSER_REALM']
+
+        new_remote_config = local_config.config.copy()
+        # copy the local pi.cfg to the remote config except the
+        # keys listed in ``save_remote_config_keys``.
+        save_remote_config_keys = ['SECRET_KEY', 'SQLALCHEMY_DATABASE_URI']
+        for key in save_remote_config_keys:
+            new_remote_config[key] = remote_config.config[key]
+        remote_config.config = new_remote_config
         remote_config.save()
 
         #
