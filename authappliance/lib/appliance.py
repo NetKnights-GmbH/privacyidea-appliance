@@ -22,6 +22,7 @@ from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
 
+from authappliance.lib.mysqlparser.mysqlparser import MySQLParser
 from .mysqlparser import mysqlparser
 from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
 from .crontabparser.cronjobparser import CronJobParser, CronJob
@@ -224,17 +225,17 @@ PI_LOGLEVEL = logging.DEBUG
 PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
 """
     
-    def __init__(self, file="/etc/privacyidea/pi.cfg", init=False):
+    def __init__(self, file="/etc/privacyidea/pi.cfg", init=False, opener=open):
         self.file = file
+        self.opener = opener
         if init:
             # get the default values
             self.initialize()
         else:
             # read the file
-            f = open(self.file)
-            content = f.read()
+            with opener(self.file, 'rb') as f:
+                content = f.read()
             self._content_to_config(content)
-            f.close()
 
     def _content_to_config(self, content):
         self.config = {}
@@ -254,14 +255,13 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         self._content_to_config(content)
 
     def save(self):
-        f = open(self.file, 'wb')
-        f.write("import logging\n")
-        for k, v in self.config.items():
-            if k in ["PI_LOGLEVEL", "SUPERUSER_REALM"]:
-                f.write("%s = %s\n" % (k, v))
-            else:
-                f.write("%s = '%s'\n" % (k, v))
-        f.close()
+        with self.opener(self.file, 'wb') as f:
+            f.write("import logging\n")
+            for k, v in self.config.items():
+                if k in ["PI_LOGLEVEL", "SUPERUSER_REALM"]:
+                    f.write("%s = %s\n" % (k, v))
+                else:
+                    f.write("%s = '%s'\n" % (k, v))
         print "Config file %s saved." % self.file
 
     def get_keyfile(self):
@@ -825,6 +825,21 @@ class MySQLConfig(object):
 
     def restart(self):
         call("service mysql restart", shell=True)
+
+class RemoteMySQLConfig(MySQLConfig):
+
+    def __init__(self, sftp):
+        """
+        Config Object for MySQL Configuration on a remote server, accessed via ssh
+
+        :param config_file: The MySQL config file
+        """
+        self.sftp = sftp
+        self.config = mysqlparser.MySQLConfiguration("/etc/mysql/my.cnf", sftp.file)
+
+    def restart(self):
+        raise NotImplementedError()
+
 
 
 
