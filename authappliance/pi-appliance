@@ -292,7 +292,7 @@ class Peer(object):
         new_remote_config = local_config.config.copy()
         # copy the local pi.cfg to the remote config except the
         # keys listed in ``save_remote_config_keys``.
-        save_remote_config_keys = ['SECRET_KEY', 'SQLALCHEMY_DATABASE_URI']
+        save_remote_config_keys = ['SQLALCHEMY_DATABASE_URI']
         for key in save_remote_config_keys:
             new_remote_config[key] = remote_config.config[key]
         remote_config.config = new_remote_config
