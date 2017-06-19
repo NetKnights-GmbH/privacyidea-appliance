@@ -176,7 +176,6 @@ class Peer(object):
         self.position_local = ""
         self.position_remote = ""
 
-
     def get_peer_data(self):
         bt = "Add another SQL Master"
         code, ip = self.d.inputbox(
@@ -192,8 +191,11 @@ class Peer(object):
             return False
 
         code, password = self.d.passwordbox(
-            "Enter the root password of the other machine.",
-            backtitle=bt)
+            "Enter the root password of the other machine. Please NOTE: "
+            "On an Ubuntu machine Root SSH login with password is forbidden. "
+            "You need to change 'PermitRootLogin' in the "
+            "/etc/ssh/sshd_config. Otherwise authentication will fail.",
+            insecure=True, backtitle=bt)
         if code != self.d.DIALOG_OK:
             return False
 
