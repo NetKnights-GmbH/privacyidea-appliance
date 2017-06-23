@@ -975,7 +975,7 @@ class RadiusMenu(object):
         if code != self.d.DIALOG_OK:
             return
 
-        code, netmask = self.d.radiolist("The netmask of the new client %s.",
+        code, netmask = self.d.radiolist("The netmask of the new client %s." % clientname,
                                          choices=[("32", "255.255.255.255 ("
                                                          "single Host)", 0),
                                                   ("24", "255.255.255.0", 1),
