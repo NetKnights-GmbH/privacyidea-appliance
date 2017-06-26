@@ -126,8 +126,11 @@ class Backup(object):
         The current backup will contain the
         encryption key. This will be encrypted with
         the password.
+        Return a tuple (success, stdout, stderr).
         '''
-        call(BACKUP_CMD, shell=True)
+        proc = Popen(BACKUP_CMD, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        return proc.returncode == 0, stdout, stderr
         
     def restore_backup(self, bfile, password=None):
         '''
@@ -135,9 +138,12 @@ class Backup(object):
         
         :param bfile: the tgz file name without the path
         :type bfile: string
+        :return: tuple (success, stdout, stderr)
         '''
-        call(RESTORE_CMD % BACKUP_DIR + "/" + bfile, shell=True)
-    
+        proc = Popen(RESTORE_CMD % BACKUP_DIR + "/" + bfile, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        return proc.returncode == 0, stdout, stderr
+
     def get_cronjobs(self):
         '''
         Parse the cronjob and return the backup times
