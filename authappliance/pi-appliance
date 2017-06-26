@@ -637,7 +637,8 @@ class AuditMenu(object):
             code, tags = self.d.menu("Here you can define times, when "
                                      "to run a audit rotation check.",
                                      choices=choices,
-                                     backtitle=bt)
+                                     backtitle=bt,
+                                     width=70)
 
             if code == self.d.DIALOG_OK:
                 if tags.startswith("Add"):
@@ -657,13 +658,13 @@ class AuditMenu(object):
 
         code, typ = self.d.menu("You can either rotate the audit log by age "
                                 "or by the number of log entries:",
-                                choices=[("by age",
+                                choices=[("by age", "",
                                           "Audit entries older than certain days will be deleted."),
-                                         ("by entries",
+                                         ("by entries", "",
                                           "If the number of entries exceed "
                                           "the highwatermark, the entries "
-                                          "will be deleted to lowwatermark")],
-                                width=70, backtitle=bt)
+                                          "will be deleted to lowwatermark.")],
+                                backtitle=bt, item_help=1)
         if code != self.d.DIALOG_OK:
             return
 
@@ -682,10 +683,10 @@ class AuditMenu(object):
             return
 
         code, bdate = self.d.inputbox("The date to run the audit rotation. "
-                                      "Please enter it like this: "
+                                      "Please enter it like this:\n"
                                       "<Minute>  <Hour>  <Day-of-Month> "
-                                      " <Month>  <Day-of-Week>. You may"
-                                      " use '*' as wildcard entry.",
+                                      " <Month>  <Day-of-Week>\n"
+                                      "You may use '*' as wildcard entry.",
                                       width=70,
                                       backtitle=bt)
 
@@ -803,10 +804,10 @@ class BackupMenu(object):
         '''
         bt = "Add a new backup date"
         code, bdate = self.d.inputbox("The date to run the backup. "
-                                      "Please enter it like this: "
+                                      "Please enter it like this:\n"
                                       "<Minute>  <Hour>  <Day-of-Month> "
-                                      " <Month>  <Day-of-Week>. You may"
-                                      " use '*' as wildcard entry.",
+                                      " <Month>  <Day-of-Week>\n"
+                                      "You may use '*' as wildcard entry.",
                                       width=70,
                                       backtitle=bt)
 
@@ -1260,7 +1261,7 @@ class MainMenu(object):
         adminrealms = self.pConfig.get_superusers()
         # convert to string
         adminrealms = ",".join(adminrealms)
-        code, tags = self.d.inputbox("You may enter a comma seperated list "
+        code, tags = self.d.inputbox("You may enter a comma separated list "
                                      "of realms that are recognized as "
                                      "admin realms.",
                                      init=adminrealms,
