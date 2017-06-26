@@ -864,17 +864,35 @@ class BackupMenu(object):
         if code == self.d.DIALOG_OK:
             # Restore the backup
             self.d.gauge_start("Restoring backup %s" % tag, percent=20)
-            self.Backup.restore_backup(tag)
+            success, stdout, stderr = self.Backup.restore_backup(tag)
             self.d.gauge_update(percent=90)
             self.data_changed = True
             time.sleep(1)
             self.d.gauge_stop()
+            if success:
+                self.d.scrollbox(u"Backup successfully restored!\n\n{}".format(stdout))
+            else:
+                text = u"""
+Restore failed:
+
+{}
+""".format(stderr)
+                self.d.scrollbox(text)
 
     def now(self):
         '''
         Run the backup now.
         '''
-        self.Backup.backup_now()
+        success, stdout, stderr = self.Backup.backup_now()
+        if success:
+            self.d.msgbox(u"Backup successfully created!")
+        else:
+            text = u"""
+Backup failed:
+
+{}
+""".format(stderr)
+            self.d.scrollbox(text)
 
     def view(self):
         '''
