@@ -72,6 +72,7 @@ class WebserverMenu(object):
                                               ("-" * 40, ""),
                                               ("Regenerate private key", "")
                                               ],
+                                     cancel='Back',
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("restart"):
@@ -493,7 +494,7 @@ class DBMenu(object):
                          ("view redundancy", ""),
                          ("setup redundancy", "master master replication"),
                          ("stop redundancy", "revert to single database")],
-
+                cancel='Back',
                 backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("init"):
@@ -599,6 +600,7 @@ class AuditMenu(object):
         while 1:
             code, tags = self.d.menu("Auditlog Rotate",
                                      choices=[("Configure Audit Log", "")],
+                                     cancel='Back',
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("Configure"):
@@ -636,6 +638,7 @@ class AuditMenu(object):
                                    comment))
             code, tags = self.d.menu("Here you can define times, when "
                                      "to run a audit rotation check.",
+                                     cancel='Back',
                                      choices=choices,
                                      backtitle=bt,
                                      width=70)
@@ -745,6 +748,7 @@ class BackupMenu(object):
                                      choices=[("Configure backup", ""),
                                               ("Backup now", ""),
                                               ("View Backups", "")],
+                                     cancel='Back',
                                      backtitle=bt)
             if code == self.d.DIALOG_OK:
                 if tags.startswith("Configure"):
@@ -786,6 +790,7 @@ class BackupMenu(object):
                                    comment))
             code, tags = self.d.menu("Here you can define times, when "
                                      "to run a backup.",
+                                     cancel='Back',
                                      choices=choices,
                                      backtitle=bt)
 
@@ -922,7 +927,8 @@ class RadiusMenu(object):
                                               ("sites",
                                                "Enable and disable RADIUS "
                                                "sites")
-                                              ])
+                                              ],
+                                     cancel='Back')
             if code == self.d.DIALOG_OK:
                 if tags.startswith("client"):
                     self.clients()
@@ -1135,6 +1141,7 @@ class MainMenu(object):
                                           "Here you may recreated your "
                                           "encryption and signing keys.")],
                 menu_height=22,
+                cancel='Back',
                 backtitle="privacyIDEA configuration",
                 item_help=1)
         
@@ -1165,6 +1172,7 @@ class MainMenu(object):
                          ("signing key", "Create new audit signing key.",
                           "Old audit entries can not be verified anymore.")],
                 menu_height=22,
+                cancel='Back',
                 backtitle="privacyIDEA Danger Zone",
                 item_help=1)
 
@@ -1190,6 +1198,7 @@ class MainMenu(object):
                                      "to either delete it or change the " 
                                      "password or create a new admin",
                                      choices=admins,
+                                     cancel='Back',
                                      backtitle="Manage administrators")
             
             if code == self.d.DIALOG_OK:
