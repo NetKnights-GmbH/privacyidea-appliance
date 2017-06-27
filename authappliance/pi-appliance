@@ -812,7 +812,8 @@ class BackupMenu(object):
                                       "Please enter it like this:\n"
                                       "<Minute>  <Hour>  <Day-of-Month> "
                                       " <Month>  <Day-of-Week>\n"
-                                      "You may use '*' as wildcard entry.",
+                                      "You may use '*' as wildcard entry.\n"
+                                      "Please note that the backup will not contain the encryption key.",
                                       width=70,
                                       backtitle=bt)
 
@@ -860,8 +861,7 @@ class BackupMenu(object):
         bt = "Restore a backup"
         code = self.d.yesno("Are you sure you want to restore the backup %s? "
                             "Current data will be lost. The restore will "
-                            "restore the encryption key, administrator "
-                            "settings, token database, audit log, RADIUS "
+                            "administrator settings, token database, audit log, RADIUS "
                             "clients, server certificates... "
                             "If unsure, please "
                             "perform a backup before restoring the old one."
@@ -891,7 +891,8 @@ Restore failed:
         '''
         success, stdout, stderr = self.Backup.backup_now()
         if success:
-            self.d.msgbox(u"Backup successfully created!")
+            self.d.msgbox(u"Backup successfully created! "
+                           u"Please note that it does not contain the encryption key.")
         else:
             text = u"""
 Backup failed:

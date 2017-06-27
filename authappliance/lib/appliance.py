@@ -123,7 +123,7 @@ class Backup(object):
     def backup_now(self, password=None):
         '''
         Create a backup of the system right now
-        The current backup will contain the
+        The current backup will not contain the
         encryption key. This will be encrypted with
         the password.
         Return a tuple (success, stdout, stderr).
