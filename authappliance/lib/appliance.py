@@ -15,6 +15,8 @@
 #
 # You should have received a copy of the GNU Affero General Public
 # License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from pwd import getpwnam
+
 import os
 import time
 import string
@@ -161,7 +163,23 @@ class Backup(object):
                                      hour=dc[1], dom=dc[2], month=dc[3],
                                      dow=dc[4]))
         self.CP.save(CRONTAB)
-        
+        # Check that privayidea can write the relevant files. Set correct permissions if possible.
+        if os.geteuid() == 0:
+            self._fix_cron_permissions(BACKUP_DIR)
+            self._fix_cron_permissions('/etc/privacyidea/mysql.cnf')
+
+    def _fix_cron_permissions(self, filename):
+        """
+        Check if ``filename`` belongs to root. If it does, chown it to CRON_USER.
+        Only call this as root.
+        """
+        if os.path.exists(filename):
+            stat = os.stat(filename)
+            if stat.st_uid == 0:
+                # Fix permissions! Set owner to CRON_USER
+                cron_user_id = getpwnam(CRON_USER).pw_uid
+                os.chown(filename, cron_user_id, -1)
+
     def get_backups(self):
         '''
         List the available backups in the self.data_dir
