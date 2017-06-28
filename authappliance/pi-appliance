@@ -1114,9 +1114,8 @@ class MainMenu(object):
         choices.append(("Webserver", "",
                         "Restart Webserver"))
         choices.append(("Backup and Restore", "",
-                        "Backup or Restore of privacyIDEA"
-                        "configuration and database and"
-                        "RADIUS clients."))
+                        "Backup or Restore of privacyIDEA "
+                        "configuration and database."))
         choices.append(("Audit Rotation", "",
                         "Define times when to check if the Audit log should "
                         "be rotated."))
