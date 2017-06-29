@@ -979,6 +979,7 @@ class RadiusMenu(object):
                                      "to either delete it or change it "
                                      "or create a new client",
                                      choices=clients,
+                                     cancel='Back',
                                      backtitle="Manage RADIUS clients")
 
             if code == self.d.DIALOG_OK:
