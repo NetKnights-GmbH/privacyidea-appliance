@@ -1090,10 +1090,11 @@ class RadiusMenu(object):
                                  backtitle=bt)
         if code == self.d.DIALOG_OK:
             if tags.startswith("Delete"):
-                self.d.yesno("Do you really want to delete the "
+                code = self.d.yesno("Do you really want to delete the "
                              "RADIUS client %s?" % clientname)
-                self.RadiusConfig.client_delete(clientname)
-                mark_service_for_restart(SERVICE_FREERADIUS)
+                if code == self.d.DIALOG_OK:
+                    self.RadiusConfig.client_delete(clientname)
+                    mark_service_for_restart(SERVICE_FREERADIUS)
 
 
 class MainMenu(object):
@@ -1267,8 +1268,9 @@ class MainMenu(object):
             if tags.startswith("Delete"):
                 self.d.yesno("Do you really want to delete the "
                              "administrator %s?" % admin_name)
-                with self.app.app_context():
-                    delete_db_admin(admin_name)
+                if code == self.d.DIALOG_OK:
+                    with self.app.app_context():
+                        delete_db_admin(admin_name)
 
             if tags.startswith("Change password"):
                 password = self.privacyidea_admin_password(admin_name)
