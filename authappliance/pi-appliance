@@ -29,7 +29,8 @@ from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG,
-                                         CRON_USER, AUDIT_CMD, BACKUP_CMD, RemoteMySQLConfig)
+                                         CRON_USER, AUDIT_CMD, BACKUP_CMD, RemoteMySQLConfig, SERVICE_APACHE,
+                                         SERVICE_FREERADIUS)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
@@ -47,6 +48,24 @@ from tempfile import NamedTemporaryFile
 DESCRIPTION = __doc__
 VERSION = "2.0"
 
+
+#: This holds the services that should be restarted
+#: at the end of the session. It should be modified
+#: using mark_service_for_restart and
+#: reset_services_for_restart.
+services_for_restart = set()
+
+def mark_service_for_restart(service):
+    """
+    Add ``service`` to set of services that should be restarted.
+    """
+    services_for_restart.add(service)
+
+def reset_services_for_restart():
+    """
+    Clear the set of services that should be restarted.
+    """
+    services_for_restart.clear()
 
 
 class WebserverMenu(object):
@@ -93,6 +112,7 @@ class WebserverMenu(object):
                             "certificate?")
         if code == self.d.DIALOG_OK:
             self.apache.create_self_signed()
+            mark_service_for_restart(SERVICE_APACHE)
 
     def generate_private_key(self):
         code, tags = self.d.menu("Regenerate private key. "
@@ -109,6 +129,7 @@ class WebserverMenu(object):
                                  backtitle="Regenerate private key")
         if code == self.d.DIALOG_OK:
             self.apache.create_private_key(tags)
+            mark_service_for_restart(SERVICE_APACHE)
 
     def generate_csr(self):
         csr = self.apache.generate_csr()
@@ -146,15 +167,13 @@ class WebserverMenu(object):
                                      width=78)
             if code == self.d.DIALOG_OK:
                 self.apache.import_cert(homedir + "/" + tags, cert)
-                self.restart()
+                mark_service_for_restart(SERVICE_APACHE)
 
     def restart(self):
         code = self.d.yesno("Do you want to restart the services for the "
                             "changes to take effect?")
         if code == self.d.DIALOG_OK:
-            self.os.restart()
-            self.data_changed = False
-
+            self.os.restart(SERVICE_APACHE)
 
 class Peer(object):
 
@@ -735,7 +754,6 @@ class AuditMenu(object):
 class BackupMenu(object):
 
     def __init__(self, app, dialog):
-
         self.app = app
         self.d = dialog
         self.Backup = Backup()
@@ -872,11 +890,11 @@ class BackupMenu(object):
             self.d.gauge_start("Restoring backup %s" % tag, percent=20)
             success, stdout, stderr = self.Backup.restore_backup(tag)
             self.d.gauge_update(percent=90)
-            self.data_changed = True
             time.sleep(1)
             self.d.gauge_stop()
             if success:
                 self.d.scrollbox(u"Backup successfully restored!\n\n{}".format(stdout))
+                mark_service_for_restart(SERVICE_APACHE)
             else:
                 text = u"""
 Restore failed:
@@ -966,6 +984,7 @@ class RadiusMenu(object):
                                       backtitle="Enable sites")
         if code == self.d.DIALOG_OK:
             self.RadiusConfig.enable_sites(tags)
+            mark_service_for_restart(SERVICE_FREERADIUS)
 
     def clients(self):
         while 1:
@@ -1061,6 +1080,7 @@ class RadiusMenu(object):
             if shortname:
                 client["shortname"] = shortname
             self.RadiusConfig.client_add({clientname: client})
+            mark_service_for_restart(SERVICE_FREERADIUS)
 
     def manage(self, clientname):
         bt = "Manage client %s" % clientname
@@ -1072,12 +1092,12 @@ class RadiusMenu(object):
                 self.d.yesno("Do you really want to delete the "
                              "RADIUS client %s?" % clientname)
                 self.RadiusConfig.client_delete(clientname)
+                mark_service_for_restart(SERVICE_FREERADIUS)
 
 
 class MainMenu(object):
     
     def __init__(self, config=None):
-        self.data_changed = False
         if config:
             self.config_file = config
         else:
@@ -1099,6 +1119,15 @@ class MainMenu(object):
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
         self.auditDialog = AuditMenu(self.app, self.d)
+
+    def restart_services_if_needed(self):
+        if services_for_restart:
+            code = self.d.yesno("Do you want to restart the services for the "
+                                "changes to take effect?")
+            if code == self.d.DIALOG_OK:
+                for service in services_for_restart:
+                    OSConfig.restart(service, True)
+                reset_services_for_restart()
 
     def main_menu(self):
         choices = [("privacyIDEA", "",
@@ -1144,8 +1173,7 @@ class MainMenu(object):
                     
             else:
                 # End
-                if self.data_changed:
-                    self.webserverDialog.restart()
+                self.restart_services_if_needed()
                 break
     
     def privacyidea_menu(self):
@@ -1300,7 +1328,7 @@ class MainMenu(object):
             adminrealms = [x.strip() for x in tags.split(",")]
             self.pConfig.set_superusers(adminrealms)
             self.pConfig.save()
-            self.data_changed = True
+            mark_service_for_restart(SERVICE_APACHE)
          
     def privacyidea_initialize(self):
         code = self.d.yesno("Do you want to initialize "
@@ -1311,7 +1339,7 @@ class MainMenu(object):
         if code == self.d.DIALOG_OK:
             self.pConfig.initialize()
             self.pConfig.save()
-            self.data_changed = True
+            mark_service_for_restart(SERVICE_APACHE)
             
     def privacyidea_enckey(self):
         code = self.d.yesno("Do you want to create a new encryption key? "
@@ -1357,7 +1385,7 @@ class MainMenu(object):
         if code == self.d.DIALOG_OK:
             self.pConfig.set_loglevel(tags)
             self.pConfig.save()
-            self.data_changed = True
+            mark_service_for_restart(SERVICE_APACHE)
 
     def privacyidea_view(self):
         text = u"""
