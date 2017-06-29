@@ -2,3 +2,5 @@ argparse==1.2.1
 paramiko==1.16.0
 pyparsing==2.0.3
 python2-pythondialog==3.0.1
+configobj==5.0.6
+six==1.10.0

@@ -42,7 +42,7 @@ import random
 import os
 from tempfile import NamedTemporaryFile
 
-
+from authappliance.lib.ldap_proxy import LDAPProxyConfig
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -1073,6 +1073,145 @@ class RadiusMenu(object):
                              "RADIUS client %s?" % clientname)
                 self.RadiusConfig.client_delete(clientname)
 
+class LDAPProxyMenu(object):
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+        self.config = LDAPProxyConfig()
+
+    def menu(self):
+        while 1:
+            code, tags = self.d.menu("Backup and Restore",
+                                     choices=[("Port and Interface", ""),
+                                              ("LDAP Backend", ""),
+                                              ("Passthrough Binds", ""),
+                                              ("Service Account", "")],
+                                     cancel='Back')
+            if code == self.d.DIALOG_OK:
+                if tags.startswith("LDAP Backend"):
+                    self.ldap_backend()
+                elif tags.startswith("Port and Interface"):
+                    self.proxy_settings()
+                elif tags.startswith("Passthrough Bind"):
+                    self.passthrough_binds()
+                elif tags.startswith("Service Account"):
+                    self.service_account()
+            else:
+                break
+
+    def passthrough_binds(self):
+        while True:
+            dns = self.config.passthrough_binds
+            choices = [('Add new Passthrough Bind DN', '')] + [(dn, '') for dn in dns]
+            code, tags = self.d.menu("You can select an existing DN "
+                                     "to delete it or create a new passthrough bind DN",
+                                     choices=choices,
+                                     backtitle="Manage Passthrough Binds",
+                                     cancel='Back')
+            if code != self.d.DIALOG_OK:
+                return
+            if tags.startswith('Add new Passthrough Bind'):
+                self.add_passthrough_bind()
+            else:
+                self.remove_passthrough_bind(tags)
+
+    def service_account(self):
+        service_account_dn, service_account_password = self.config.service_account
+        code, dn = self.d.inputbox('Please enter the Distinguished Name of the Service Account:',
+                                   init=service_account_dn,
+                                   width=60)
+        if code != self.d.DIALOG_OK:
+            return
+        code, password = self.d.passwordbox('Please enter the password of the Service Account:\n'
+                                            '(your typing will not be visible)',
+                                            width=60)
+        if code != self.d.DIALOG_OK:
+            return
+        # if the given password is empty, the user probably wants to re-use the currently set password
+        # TODO: What if the password is intentionally empty?
+        if not password:
+            password = service_account_password
+        self.config.set_service_account(dn, password)
+
+    def add_passthrough_bind(self):
+        code, dn = self.d.inputbox('Please enter the Distinguished Name for which LDAP Bind Requests '
+                                   'should be forwarded directly to the LDAP Backend:',
+                                   width=60)
+        if code != self.d.DIALOG_OK:
+            return
+        self.config.add_passthrough_bind(dn)
+
+    def remove_passthrough_bind(self, dn):
+        code = self.d.yesno("Do you really want to delete the Passthrough Bind DN\n{}?".format(dn),
+                            width=60)
+        if code == self.d.DIALOG_OK:
+            self.config.remove_passthrough_bind(dn)
+
+    def proxy_settings(self):
+        current_port, current_interface = self.config.proxy_settings
+        port = self._ask_for_ldap_port('Please enter the port to serve the LDAP proxy on (default: 389):',
+                                       init=current_port)
+        if port is None:
+            return
+        code, interface = self.d.inputbox('Please enter the interface to serve the LDAP proxy on (leave '
+                                                         'blank to listen on all interfaces):',
+                                           init=current_interface)
+        if code != self.d.DIALOG_OK:
+            return
+        # TODO: Test connection?
+        endpoint = self._build_server_endpoint_string(port, interface)
+        self.config.set_proxy_endpoint(endpoint)
+
+    def _ask_for_ldap_port(self, message, init=''):
+        while True:
+            code, port_string = self.d.inputbox(message, init=init)
+            if code != self.d.DIALOG_OK:
+                return None
+            try:
+                if port_string:
+                    port = int(port_string)
+                else:
+                    port = 389
+                return port
+            except ValueError:
+                self.d.msgbox('{} is not a valid port!'.format(port_string))
+
+    def ldap_backend(self):
+        current_protocol, current_host, current_port = self.config.backend_settings
+        code, host = self.d.inputbox('Please enter the IP address of the LDAP backend:',
+                                     init=current_host)
+        if code != self.d.DIALOG_OK:
+            return
+        port = self._ask_for_ldap_port('Please enter the port to connect to (default: 389):',
+                                       init=current_port)
+        if port is None:
+            return
+        code, protocol = self.d.menu('Please choose the protocol to use for the connection:',
+                                     choices=[('LDAP', 'unencrypted LDAP'),
+ #                                             ('STARTTLS', 'LDAP and opportunistic TLS'),
+                                              #  TODO: STARTTLS not yet supported
+                                              ('LDAPS', 'LDAP over TLS')])
+        if code != self.d.DIALOG_OK:
+            return
+        # TODO: give trust roots
+        endpoint = self._build_client_endpoint_string(protocol, host, port)
+        self.config.set_backend_endpoint(endpoint)
+        # TODO: We could actually test the connection here!
+
+    def _build_client_endpoint_string(self, protocol, host, port):
+        prefix = {'LDAP': 'tcp', 'LDAPS': 'tls'}[protocol]
+        return '{prefix}:host={host}:port={port}'.format(prefix=prefix,
+                                                         host=host,
+                                                         port=port)
+
+    def _build_server_endpoint_string(self, port, interface=''):
+        if interface:
+            interface_string = ':interface={}'.format(interface)
+        else:
+            interface_string = ''
+        return 'tcp:port={port}'.format(port=port) + interface_string
+
+
 
 class MainMenu(object):
     
@@ -1099,6 +1238,7 @@ class MainMenu(object):
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
         self.auditDialog = AuditMenu(self.app, self.d)
+        self.ldap_proxy_dialog = LDAPProxyMenu(self.app, self.d)
 
     def main_menu(self):
         choices = [("privacyIDEA", "",
@@ -1120,6 +1260,8 @@ class MainMenu(object):
         choices.append(("Audit Rotation", "",
                         "Define times when to check if the Audit log should "
                         "be rotated."))
+        choices.append(("LDAP Proxy", "",
+                        "Configure a local instance of the privacyIDEA LDAP Proxy"))
 
         while 1:
             code, tags = self.d.menu("Which subject do you want to configure?",
@@ -1141,6 +1283,8 @@ class MainMenu(object):
                     self.dbDialog.menu()
                 elif tags.startswith("Audit"):
                     self.auditDialog.menu()
+                elif tags.startswith("LDAP Proxy"):
+                    self.ldap_proxy_dialog.menu()
                     
             else:
                 # End
