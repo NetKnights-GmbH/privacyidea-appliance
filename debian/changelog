@@ -1,11 +1,11 @@
-pi-appliance (2.0~dev10) xenial; urgency=low
+pi-appliance (2.0~dev11) xenial; urgency=low
 
   * change to xenial
   * do not use pi-manage
   * setup mysql master-master
   * run backup and restore (manually/automated)
 
- -- Cornelius Kölbel <cornelius.koelbel@netknights.it>  Thu, 29 Jun 2017 19:00:00 +0200
+ -- Cornelius Kölbel <cornelius.koelbel@netknights.it>  Fri, 30 Jun 2017 15:00:00 +0200
 
 pi-appliance (2.0~dev4) trusty; urgency=low
 
