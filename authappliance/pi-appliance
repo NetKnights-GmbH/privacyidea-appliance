@@ -1265,7 +1265,7 @@ class MainMenu(object):
                                  backtitle=bt)
         if code == self.d.DIALOG_OK:
             if tags.startswith("Delete"):
-                self.d.yesno("Do you really want to delete the "
+                code = self.d.yesno("Do you really want to delete the "
                              "administrator %s?" % admin_name)
                 if code == self.d.DIALOG_OK:
                     with self.app.app_context():
