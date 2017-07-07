@@ -1085,7 +1085,8 @@ class LDAPProxyMenu(object):
                                      choices=[("Port and Interface", ""),
                                               ("LDAP Backend", ""),
                                               ("Passthrough Binds", ""),
-                                              ("Service Account", "")],
+                                              ("Service Account", ""),
+                                              ("User Mapping", "")],
                                      cancel='Back')
             if code == self.d.DIALOG_OK:
                 if tags.startswith("LDAP Backend"):
@@ -1096,8 +1097,58 @@ class LDAPProxyMenu(object):
                     self.passthrough_binds()
                 elif tags.startswith("Service Account"):
                     self.service_account()
+                elif tags.startswith("User Mapping"):
+                    self.user_mapping()
             else:
                 break
+
+    def user_mapping(self):
+        current_strategy = self.config.user_mapping_strategy
+        if current_strategy:
+            note = 'Current mapping strategy: {}.'.format(current_strategy)
+        else:
+            note = 'Currently, no mapping strategy is set.'
+        code, tags = self.d.menu("Please select the strategy that should be used to map "
+                                 "Bind DNs to privacyIDEA usernames\n{}".format(note),
+                                 choices=[('match', '', 'Extract username from DN using a regular expression'),
+                                          ('lookup', '', 'Extract username from a LDAP attribute')],
+                                 item_help=True)
+        if code != self.d.DIALOG_OK:
+            return
+        if tags == 'match':
+            current_pattern = self.config.user_mapping_config.get('pattern', '')
+            code, pattern = self.d.inputbox("Please enter a regular expression to match incoming Bind DNs "
+                                            "against. The pattern should have one capturing group, which is "
+                                            "the privacyIDEA username.",
+                                            width=70,
+                                            init=current_pattern)
+            if code != self.d.DIALOG_OK:
+                return
+            self.config.set_user_mapping_config({
+                'strategy': 'match',
+                'pattern': pattern,
+            })
+        elif tags == 'lookup':
+            current_attribute = self.config.user_mapping_config.get('attribute', '')
+            code, attribute = self.d.inputbox("Please enter the LDAP attribute which contains the privacyIDEA username.",
+                                              width=70,
+                                              init=current_attribute)
+            if code != self.d.DIALOG_OK:
+                return
+            self.config.set_user_mapping_config({
+                'strategy': 'lookup',
+                'attribute': attribute,
+            })
+            # Ensure that there is a service account set
+            service_account_dn, service_account_password = self.config.service_account
+            if not service_account_dn:
+                self.d.msgbox('In order to use the "lookup" mapping strategy, a service account needs to be '
+                              'configured in the following.',
+                              width=70)
+                self.service_account()
+        else:
+            raise NotImplementedError()
+
 
     def passthrough_binds(self):
         while True:

@@ -122,3 +122,15 @@ class LDAPProxyConfig(object):
             'password': password
         }
         self.save()
+
+    @property
+    def user_mapping_strategy(self):
+        return self.user_mapping_config.get('strategy', '')
+
+    @property
+    def user_mapping_config(self):
+        return self.config.get('user-mapping', {})
+
+    def set_user_mapping_config(self, config):
+        self.config['user-mapping'] = config
+        self.save()
