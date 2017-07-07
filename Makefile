@@ -10,7 +10,7 @@ info:
 	@echo "make translate    - translate WebUI"
 	
 #VERSION=1.3~dev5
-VERSION=2.0~dev8
+VERSION=2.0~dev11
 SRCDIRS=authappliance
 SRCFILES=setup.py Makefile Changelog LICENSE requirements.txt
 LOCAL_SERIES=`lsb_release -a | grep Codename | cut -f2`

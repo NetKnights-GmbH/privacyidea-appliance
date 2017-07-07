@@ -43,6 +43,8 @@ BACKUP_DIR = "/var/lib/privacyidea/backup"
 BACKUP_CMD = "pi-manage backup create -d %s" % BACKUP_DIR
 AUDIT_CMD = "pi-manage rotate_audit "
 
+SERVICE_APACHE = 'apache2'
+SERVICE_FREERADIUS = 'freeradius'
 
 def generate_password(size=6, characters=string.ascii_lowercase +
                       string.ascii_uppercase + string.digits):
@@ -536,7 +538,7 @@ class OSConfig(object):
         '''
         Restart the webserver
         '''
-        service = service or "apache2"
+        service = service or SERVICE_APACHE
         p = Popen(['sudo', 'service',
                    service,
                    action],
