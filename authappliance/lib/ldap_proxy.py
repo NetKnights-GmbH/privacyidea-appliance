@@ -1,8 +1,13 @@
+import socket
+
+import os
 import re
 
 import configobj
 import validate
 from pi_ldapproxy.config import load_config
+
+from authappliance.lib.appliance import ApacheConfig
 
 LDAP_PROXY_CONFIG_FILE = '/etc/privacyidea/proxy.ini'
 
@@ -50,7 +55,35 @@ def extract_from_endpoint(endpoint, attribute):
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
         self.filename = filename
-        self.config = load_config(self.filename) # TODO: This exits if config is malformed!
+        if self.exists:
+            self.config = load_config(self.filename)  # TODO: This exits if config is malformed!
+        else:
+            self.config = configobj.ConfigObj()
+
+    def set_default_config(self):
+        """
+        set all config options that are not configurable by any accessor methods below
+        :return:
+        """
+        self.config['bind-cache'] = {'enabled': False}
+        self.config['app-cache'] = {'enabled': False}
+        self.config['realm-mapping'] = {
+            'strategy': 'static',
+            'realm': '',
+        } # TODO: Make realm mapping configurable
+        self.config.setdefault('ldap-backend', {})['use-tls'] = False
+        self.config.setdefault('ldap-backend', {})['test-connection'] = False # TODO
+        privacyidea_cert, _ = ApacheConfig().get_certificates()
+        self.config['privacyidea'] = {
+            'instance': 'https://{}'.format(socket.getfqdn()), # TODO: should probably use the hostname from the cert?
+                                                               # Or disable validation entirely?
+            'certificate': privacyidea_cert,
+        }
+
+
+    @property
+    def exists(self):
+        return os.path.exists(self.filename)
 
     def save(self):
         with open(self.filename, 'w') as f:
@@ -69,6 +102,8 @@ class LDAPProxyConfig(object):
             protocol = 'LDAP'
         elif endpoint.startswith('tls:'):
             protocol = 'LDAPS'
+        else:
+            protocol = ''
         host = extract_from_endpoint(endpoint, 'host')
         port = extract_from_endpoint(endpoint, 'port')
         return protocol, host, port
