@@ -87,10 +87,10 @@ class WebserverMenu(object):
                    (lambda: None, "-" * 40, ""),
                    (self.generate_private_key, "Regenerate private key", "")]
         while 1:
-            menu = self.d.choice("Configure Webserver",
-                                 choices=choices,
-                                 cancel='Back',
-                                 backtitle=bt)
+            menu = self.d.value_menu("Configure Webserver",
+                                     choices=choices,
+                                     cancel='Back',
+                                     backtitle=bt)
             if menu is not None:
                 menu()
             else:
@@ -754,10 +754,10 @@ class BackupMenu(object):
                    (self.now, "Backup now", ""),
                    (self.view, "View Backups", "")]
         while 1:
-            menu = self.d.choice("Backup and Restore",
-                                 choices=choices,
-                                 cancel='Back',
-                                 backtitle=bt)
+            menu = self.d.value_menu("Backup and Restore",
+                                     choices=choices,
+                                     cancel='Back',
+                                     backtitle=bt)
             if menu is not None:
                 menu()
             else:
@@ -946,9 +946,9 @@ class RadiusMenu(object):
         choices = [(self.clients, "client config", ""),
                    (self.sites, "sites", "Enable and disable RADIUS sites")]
         while 1:
-            menu = self.d.choice("Configure FreeRADIUS",
-                                 choices=choices,
-                                 cancel='Back')
+            menu = self.d.value_menu("Configure FreeRADIUS",
+                                     choices=choices,
+                                     cancel='Back')
             if menu is not None:
                 menu()
             else:
@@ -1096,9 +1096,9 @@ class LDAPProxyMenu(object):
                 if not self.wizard():
                     break
             else:
-                menu = self.d.choice("LDAP Proxy",
-                                     choices=choices,
-                                     cancel='Back')
+                menu = self.d.value_menu("LDAP Proxy",
+                                         choices=choices,
+                                         cancel='Back')
                 if menu is not None:
                     menu()
                 else:
@@ -1137,11 +1137,11 @@ class LDAPProxyMenu(object):
         while True:
             mapping_choices = [('match', 'match', '', 'Extract username from DN using a regular expression'),
                                ('lookup', 'lookup', '', 'Extract username from a LDAP attribute')]
-            strategy = self.d.choice("Please select the strategy that should be used to map "
-                                     "Bind DNs to privacyIDEA usernames",
-                                     choices=mapping_choices,
-                                     current=self.config.user_mapping_strategy,
-                                     item_help=True)
+            strategy = self.d.value_radiolist("Please select the strategy that should be used to map "
+                                              "Bind DNs to privacyIDEA usernames",
+                                              choices=mapping_choices,
+                                              current=self.config.user_mapping_strategy,
+                                              item_help=True)
             if strategy is None:
                 return False
             if strategy == 'match':
@@ -1183,12 +1183,13 @@ class LDAPProxyMenu(object):
                 raise NotImplementedError()
 
     def realm_mapping(self):
-        mapping_choices = [('static', 'static', '', 'Statically assign the same realm to all users')]
-        strategy = self.d.choice('Please select the strategy according to which privacyIDEA realms '
-                                 'should be assigned to authentication requests.',
-                                 choices=mapping_choices,
-                                 current=self.config.realm_mapping_strategy,
-                                 item_help=True)
+        mapping_choices = [('static', 'static',
+                            '', 'Statically assign the same realm to all users')]
+        strategy = self.d.value_radiolist('Please select the strategy according to which privacyIDEA realms '
+                                          'should be assigned to authentication requests.',
+                                          choices=mapping_choices,
+                                          current=self.config.realm_mapping_strategy,
+                                          item_help=True)
         if strategy is None:
             return False
         if strategy == 'static':
@@ -1297,12 +1298,12 @@ class LDAPProxyMenu(object):
                                        init=current_port)
         if port is None:
             return False
-        protocol = self.d.choice('Please choose the protocol to use for the connection:',
-                                 choices=[('LDAP', 'LDAP', 'unencrypted LDAP'),
-                                          # ('STARTTLS', 'LDAP and opportunistic TLS'),
-                                          # TODO: STARTTLS not yet supported
-                                          ('LDAPS', 'LDAPS', 'LDAP over TLS')],
-                                 current=current_protocol)
+        protocol = self.d.value_radiolist('Please choose the protocol to use for the connection:',
+                                          choices=[('LDAP', 'LDAP', 'unencrypted LDAP'),
+                                                   # ('STARTTLS', 'LDAP and opportunistic TLS'),
+                                                   #  TODO: STARTTLS not yet supported
+                                                   ('LDAPS', 'LDAPS', 'LDAP over TLS')],
+                                          current=current_protocol)
         if protocol is None:
             return False
         # TODO: give trust roots
@@ -1326,11 +1327,12 @@ class LDAPProxyMenu(object):
                  'all searches are forwarded', '',
                  'All authenticated users can issue LDAP searches after authentication.')]
         # TODO: What to do if the user has set allow-search=False, bind-service-account=True?
-        choice = self.d.choice('Please choose how incoming LDAP Search Requests should be handled by the LDAP Proxy.',
-                               choices=choices,
-                               item_help=True,
-                               current=self.config.search_permissions,
-                               width=70)
+        choice = self.d.value_radiolist('Please choose how incoming LDAP Search Requests should be '
+                                        'handled by the LDAP Proxy.',
+                                        choices=choices,
+                                        item_help=True,
+                                        current=self.config.search_permissions,
+                                        width=70)
         if choice is None:
             return False
         allow_search, bind_service_account = choice
@@ -1433,11 +1435,11 @@ class MainMenu(object):
                         "Configure a local instance of the privacyIDEA LDAP Proxy"))
 
         while 1:
-            menu = self.d.choice("Which subject do you want to configure?",
-                                 choices=choices,
-                                 backtitle="privacyIDEA configuration",
-                                 cancel="Exit",
-                                 item_help=True)
+            menu = self.d.value_menu("Which subject do you want to configure?",
+                                     choices=choices,
+                                     backtitle="privacyIDEA configuration",
+                                     cancel="Exit",
+                                     item_help=True)
             if menu is not None:
                 menu()
             else:
@@ -1453,7 +1455,7 @@ class MainMenu(object):
                    (self.privacyidea_danger_menu, "Danger zone!", "Enter at your own risk!",
                                                   "Here you may recreated your encryption and signing keys.")]
         while 1:
-            menu = self.d.choice(
+            menu = self.d.value_menu(
                 "Configure privacyidea",
                 choices=choices,
                 menu_height=22,
@@ -1475,7 +1477,7 @@ class MainMenu(object):
                    (self.privacyidea_sign, "signing key", "Create new audit signing key.",
                     "Old audit entries can not be verified anymore.")]
         while 1:
-            menu = self.d.choice(
+            menu = self.d.value_menu(
                 "privacyIDEA Danger Zone",
                 choices=choices,
                 menu_height=22,
