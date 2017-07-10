@@ -43,6 +43,7 @@ import random
 import os
 from tempfile import NamedTemporaryFile
 
+from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig
 
 DESCRIPTION = __doc__
@@ -67,14 +68,6 @@ def reset_services_for_restart():
     """
     services_for_restart.clear()
 
-def show_current_choice(choices, current_index):
-    """
-    Given a dialog-compatible list of choices, highlight the current choice identified by index ``current_index``
-    and return the new list of choices.
-    """
-    return [(choice[0] + (' (current)' if current_index == index else ''),) + choice[1:]
-            for index, choice in enumerate(choices)]
-
 class WebserverMenu(object):
 
     def __init__(self, app, dialog):
@@ -85,32 +78,21 @@ class WebserverMenu(object):
 
     def menu(self):
         bt = "Webservice configuration"
+        choices = [(self.restart, "restart services", ""),
+                   (lambda: None, "-" * 40, ""),
+                   (self.generate_self, "Generate selfsigned certificate", ""),
+                   (lambda: None, "-" * 40, ""),
+                   (self.generate_csr, "Generate Certificate Signing Request", ""),
+                   (self.import_certificate, "Import certificate", ""),
+                   (lambda: None, "-" * 40, ""),
+                   (self.generate_private_key, "Regenerate private key", "")]
         while 1:
-            code, tags = self.d.menu("Configure Webserver",
-                                     choices=[("restart services", ""),
-                                              ("-" * 40, ""),
-                                              ("Generate selfsigned "
-                                               "certificate", ""),
-                                              ("-" * 40, ""),
-                                              ("Generate Certificate "
-                                               "Signing Request", ""),
-                                              ("Import certificate", ""),
-                                              ("-" * 40, ""),
-                                              ("Regenerate private key", "")
-                                              ],
-                                     cancel='Back',
-                                     backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("restart"):
-                    self.restart()
-                if tags.startswith("Regenerate private"):
-                    self.generate_private_key()
-                if tags.startswith("Generate self"):
-                    self.generate_self()
-                if tags.startswith("Generate Certificate"):
-                    self.generate_csr()
-                if tags.startswith("Import"):
-                    self.import_certificate()
+            menu = self.d.choice("Configure Webserver",
+                                 choices=choices,
+                                 cancel='Back',
+                                 backtitle=bt)
+            if menu is not None:
+                menu()
             else:
                 break
 
@@ -768,20 +750,16 @@ class BackupMenu(object):
     def menu(self):
         bt = "Backup and Restore configuration"
         self.Backup.CP.read()
+        choices = [(self.config, "Configure backup", ""),
+                   (self.now, "Backup now", ""),
+                   (self.view, "View Backups", "")]
         while 1:
-            code, tags = self.d.menu("Backup and Restore",
-                                     choices=[("Configure backup", ""),
-                                              ("Backup now", ""),
-                                              ("View Backups", "")],
-                                     cancel='Back',
-                                     backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Configure"):
-                    self.config()
-                elif tags.startswith("Backup"):
-                    self.now()
-                elif tags.startswith("View Backup"):
-                    self.view()
+            menu = self.d.choice("Backup and Restore",
+                                 choices=choices,
+                                 cancel='Back',
+                                 backtitle=bt)
+            if menu is not None:
+                menu()
             else:
                 break
 
@@ -965,19 +943,14 @@ class RadiusMenu(object):
             self.RadiusConfig = None
 
     def menu(self):
+        choices = [(self.clients, "client config", ""),
+                   (self.sites, "sites", "Enable and disable RADIUS sites")]
         while 1:
-            code, tags = self.d.menu("Configure FreeRADIUS",
-                                     choices=[("client config", ""),
-                                              ("sites",
-                                               "Enable and disable RADIUS "
-                                               "sites")
-                                              ],
-                                     cancel='Back')
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("client"):
-                    self.clients()
-                if tags.startswith("sites"):
-                    self.sites()
+            menu = self.d.choice("Configure FreeRADIUS",
+                                 choices=choices,
+                                 cancel='Back')
+            if menu is not None:
+                menu()
             else:
                 break
 
@@ -1110,33 +1083,23 @@ class LDAPProxyMenu(object):
         self.config = LDAPProxyConfig()
 
     def menu(self):
+        choices = [(self.proxy_settings, "Port and Interface", ""),
+                   (self.ldap_backend, "LDAP Backend", ""),
+                   (self.passthrough_binds, "Passthrough Binds", ""),
+                   (self.service_account, "Service Account", ""),
+                   (self.user_mapping, "User Mapping", ""),
+                   (self.search_permissions, "Search Permissions", "")]
         while 1:
             if not self.config.exists:
                 # Do not run the wizard in an infinite loop if it is canceled
                 if not self.wizard():
                     break
             else:
-                code, tags = self.d.menu("LDAP Proxy",
-                                         choices=[("Port and Interface", ""),
-                                                  ("LDAP Backend", ""),
-                                                  ("Passthrough Binds", ""),
-                                                  ("Service Account", ""),
-                                                  ("User Mapping", ""),
-                                                  ("Search Permissions", "")],
-                                         cancel='Back')
-                if code == self.d.DIALOG_OK:
-                    if tags.startswith("LDAP Backend"):
-                        self.ldap_backend()
-                    elif tags.startswith("Port and Interface"):
-                        self.proxy_settings()
-                    elif tags.startswith("Passthrough Bind"):
-                        self.passthrough_binds()
-                    elif tags.startswith("Service Account"):
-                        self.service_account()
-                    elif tags.startswith("User Mapping"):
-                        self.user_mapping()
-                    elif tags.startswith("Search Permissions"):
-                        self.search_permissions()
+                menu = self.d.choice("LDAP Proxy",
+                                     choices=choices,
+                                     cancel='Back')
+                if menu is not None:
+                    menu()
                 else:
                     break
 
@@ -1175,19 +1138,16 @@ class LDAPProxyMenu(object):
                 note = 'Current mapping strategy: {}.'.format(current_strategy)
             else:
                 note = 'Currently, no mapping strategy is set.'
-            mapping_choices = [('match', '', 'Extract username from DN using a regular expression'),
-                               ('lookup', '', 'Extract username from a LDAP attribute')]
-            current_mapping_choice = {
-                'match': 0,
-                'lookup': 1,
-            }.get(self.config.user_mapping_strategy, -1)
-            code, tags = self.d.menu("Please select the strategy that should be used to map "
+            mapping_choices = [('match', 'match', '', 'Extract username from DN using a regular expression'),
+                               ('lookup', 'lookup', '', 'Extract username from a LDAP attribute')]
+            strategy = self.d.choice("Please select the strategy that should be used to map "
                                      "Bind DNs to privacyIDEA usernames\n{}".format(note),
-                                     choices=show_current_choice(mapping_choices, current_mapping_choice),
+                                     choices=mapping_choices,
+                                     current=self.config.user_mapping_strategy,
                                      item_help=True)
-            if code != self.d.DIALOG_OK:
+            if strategy is None:
                 return False
-            if tags.startswith('match'):
+            if strategy == 'match':
                 current_pattern = self.config.user_mapping_config.get('pattern', '')
                 code, pattern = self.d.inputbox("Please enter a regular expression to match incoming Bind DNs "
                                                 "against. The pattern should have one capturing group, which is "
@@ -1201,7 +1161,7 @@ class LDAPProxyMenu(object):
                     'pattern': pattern,
                 })
                 return True
-            elif tags.startswith('lookup'):
+            elif strategy == 'lookup':
                 current_attribute = self.config.user_mapping_config.get('attribute', '')
                 code, attribute = self.d.inputbox("Please enter the LDAP attribute which "
                                                   "contains the privacyIDEA username.",
@@ -1315,20 +1275,14 @@ class LDAPProxyMenu(object):
                                        init=current_port)
         if port is None:
             return False
-        protocol_choices = [('LDAP', 'unencrypted LDAP'),
-#                           ('STARTTLS', 'LDAP and opportunistic TLS'),
-                            # TODO: STARTTLS not yet supported
-                            ('LDAPS', 'LDAP over TLS')]
-        current_protocol_choice = {
-            'LDAP': 0,
-            'LDAPS': 1
-        }.get(current_protocol, -1)
-        code, protocol_choice = self.d.menu('Please choose the protocol to use for the connection:',
-                                            choices=show_current_choice(protocol_choices, current_protocol_choice))
-        if code != self.d.DIALOG_OK:
+        protocol = self.d.choice('Please choose the protocol to use for the connection:',
+                                 choices=[('LDAP', 'LDAP', 'unencrypted LDAP'),
+                                          # ('STARTTLS', 'LDAP and opportunistic TLS'),
+                                          # TODO: STARTTLS not yet supported
+                                          ('LDAPS', 'LDAPS', 'LDAP over TLS')],
+                                 current=current_protocol)
+        if protocol is None:
             return False
-        # strip the (current)
-        protocol = protocol_choice.split(' ')[0]
         # TODO: give trust roots
         endpoint = self._build_client_endpoint_string(protocol, host, port)
         self.config.set_backend_endpoint(endpoint)
@@ -1338,35 +1292,28 @@ class LDAPProxyMenu(object):
     def search_permissions(self):
         choices = [
                 # allow-search = false, bind-service-account = false
-                ('no searches are forwarded', '',
-                    'LDAP searches are never forwarded to the backend.'),
+                ((False, False),
+                 'no searches are forwarded', '',
+                 'LDAP searches are never forwarded to the backend.'),
                 # allow-search = true, bind-service-account = false
-                ('only searches by passthrough DNs are forwarded', '',
-                    'Only LDAP searches by users listed in "Passthrough DNs" are forwarded to the backend.'),
+                ((True, False),
+                 'only searches by passthrough DNs are forwarded', '',
+                 'Only LDAP searches by users listed in "Passthrough DNs" are forwarded to the backend.'),
                 # allow-search = true, bind-service-account = true
-                ('all searches are forwarded', '',
-                    'All authenticated users can issue LDAP searches after authentication.')]
-        # (allow-search, bind-service-account)
-        current_choice = {
-            (False, False): 0,
-            (True, False): 1,
-            (True, True): 2
-        }.get(self.config.search_permissions, -1)
+                ((True, True),
+                 'all searches are forwarded', '',
+                 'All authenticated users can issue LDAP searches after authentication.')]
         # TODO: What to do if the user has set allow-search=False, bind-service-account=True?
-        code, tags = self.d.menu('Please choose how incoming LDAP Search Requests should be handled by the LDAP Proxy.',
-                                 choices=show_current_choice(choices, current_choice),
-                                 item_help=True,
-                                 width=70)
-        if code != self.d.DIALOG_OK:
+        choice = self.d.choice('Please choose how incoming LDAP Search Requests should be handled by the LDAP Proxy.',
+                               choices=choices,
+                               item_help=True,
+                               current=self.config.search_permissions,
+                               width=70)
+        if choice is None:
             return False
-        if tags.startswith('no searches'):
-            self.config.set_search_permissions(False, False)
-            return True
-        elif tags.startswith('only searches'):
-            self.config.set_search_permissions(True, False)
-            return True
-        elif tags.startswith('all searches'):
-            self.config.set_search_permissions(True, True)
+        allow_search, bind_service_account = choice
+        self.config.set_search_permissions(allow_search, bind_service_account)
+        if allow_search and bind_service_account:
             # display disclaimer
             self.d.msgbox('From now on, all searches by authenticated users are forwarded to the LDAP server. '
                           'Please note that this is accomplished by forwarding search requests '
@@ -1383,7 +1330,7 @@ class LDAPProxyMenu(object):
             else:
                 return True
         else:
-            raise NotImplementedError()
+            return True
 
     def _build_client_endpoint_string(self, protocol, host, port):
         prefix = {'LDAP': 'tcp', 'LDAPS': 'tls'}[protocol]
@@ -1418,7 +1365,7 @@ class MainMenu(object):
             sys.exit(5)
 
         self.app = create_app(config_name="production")
-        self.d = Dialog(dialog="dialog")
+        self.d = ExtDialog(dialog="dialog")
         self.radiusDialog = RadiusMenu(self.app, self.d)
         self.backupDialog = BackupMenu(self.app, self.d)
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
@@ -1436,112 +1383,88 @@ class MainMenu(object):
                 reset_services_for_restart()
 
     def main_menu(self):
-        choices = [("privacyIDEA", "",
-                    "Configure privacyIDEA application "
-                    "stuff like administrators.")
+        # As we use ``self.d.choice``, we can simply pass the function to call as the return value.
+        choices = [(self.privacyidea_menu,
+                    "privacyIDEA", "",
+                    "Configure privacyIDEA application stuff like administrators.")
                    ]
         if self.radiusDialog.RadiusConfig:
-            choices.append(("FreeRADIUS", "",
-                            "Configure RADIUS settings like "
-                            "the RADIUS clients."))
-        choices.append(("Database", "",
+            choices.append((self.radiusDialog.menu,
+                            "FreeRADIUS", "",
+                            "Configure RADIUS settings like the RADIUS clients."))
+        choices.append((self.dbDialog.menu,
+                        "Database", "",
                         "Configure database and setup redundancy"))
-        choices.append(("Webserver", "",
+        choices.append((self.webserverDialog.menu,
+                        "Webserver", "",
                         "Restart Webserver"))
-        choices.append(("Backup and Restore", "",
+        choices.append((self.backupDialog.menu,
+                        "Backup and Restore", "",
                         "Backup or Restore of privacyIDEA "
                         "configuration and database."))
-        choices.append(("Audit Rotation", "",
+        choices.append((self.auditDialog.menu,
+                        "Audit Rotation", "",
                         "Define times when to check if the Audit log should "
                         "be rotated."))
-        choices.append(("LDAP Proxy", "",
+        choices.append((self.ldap_proxy_dialog.menu,
+                        "LDAP Proxy", "",
                         "Configure a local instance of the privacyIDEA LDAP Proxy"))
 
         while 1:
-            code, tags = self.d.menu("Which subject do you want to configure?",
-                                     choices=choices,
-                                     backtitle="privacyIDEA configuration",
-                                     cancel="Exit",
-                                     item_help=1)
-            if code == self.d.DIALOG_OK:
-                print tags
-                if tags == "privacyIDEA":
-                    self.privacyidea_menu()
-                elif tags == "FreeRADIUS":
-                    self.radiusDialog.menu()
-                elif tags.startswith("Backup"):
-                    self.backupDialog.menu()
-                elif tags.startswith("Webserver"):
-                    self.webserverDialog.menu()
-                elif tags.startswith("Database"):
-                    self.dbDialog.menu()
-                elif tags.startswith("Audit"):
-                    self.auditDialog.menu()
-                elif tags.startswith("LDAP Proxy"):
-                    self.ldap_proxy_dialog.menu()
-                    
+            menu = self.d.choice("Which subject do you want to configure?",
+                                 choices=choices,
+                                 backtitle="privacyIDEA configuration",
+                                 cancel="Exit",
+                                 item_help=True)
+            if menu is not None:
+                menu()
             else:
                 # End
                 self.restart_services_if_needed()
                 break
     
     def privacyidea_menu(self):
+        choices = [(self.privacyidea_view, "view config", "Display configuration.",""),
+                   (self.privacyidea_loglevel, "loglevel", "Change log level.", ""),
+                   (self.privacyidea_adminrealms, "admin realms", "Modify admin realms.", ""),
+                   (self.privacyidea_admins, "manage local admins", "Modify admins.", ""),
+                   (self.privacyidea_danger_menu, "Danger zone!", "Enter at your own risk!",
+                                                  "Here you may recreated your encryption and signing keys.")]
         while 1:
-            code, tags = self.d.menu(
+            menu = self.d.choice(
                 "Configure privacyidea",
-                choices=[("view config", "Display configuration.",""),
-                         ("loglevel", "Change log level.", ""),
-                         ("admin realms", "Modify admin realms.", ""),
-                         ("manage local admins", "Modify admins.", ""),
-                         ("Danger zone!", "Enter at your own risk!",
-                                          "Here you may recreated your "
-                                          "encryption and signing keys.")],
+                choices=choices,
                 menu_height=22,
                 cancel='Back',
                 backtitle="privacyIDEA configuration",
-                item_help=1)
+                item_help=True)
         
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("loglevel"):
-                    self.privacyidea_loglevel()
-                elif tags.startswith("view"):
-                    self.privacyidea_view()
-                elif tags.startswith("admin realms"):
-                    self.privacyidea_adminrealms()
-                elif tags.startswith("manage local admins"):
-                    self.privacyidea_admins()
-                elif tags.startswith("Danger zone"):
-                    self.privacyidea_danger_menu()
+            if menu is not None:
+                menu()
             else:
                 break
 
     def privacyidea_danger_menu(self):
+        choices = [(self.privacyidea_initialize,
+                    "initialize pi.cfg", "Create new pi.cfg-file.",
+                    "This will also create new salt and pepper. Admins will not be able to login anymore!"),
+                   (self.privacyidea_enckey, "encryption key", "Create new encryption key.",
+                    "Token seeds can not be decrypted anymore!"),
+                   (self.privacyidea_sign, "signing key", "Create new audit signing key.",
+                    "Old audit entries can not be verified anymore.")]
         while 1:
-            code, tags = self.d.menu(
+            menu = self.d.choice(
                 "privacyIDEA Danger Zone",
-                choices=[("initialize pi.cfg-file",
-                          "Create new pi.cfg-file.",
-                          "This will also create new salt and pepper. Admins "
-                          "will not be able to login anymore!"),
-                         ("encryption key", "Create new encryption key.",
-                          "Token seeds can not be decrypted anymore!"),
-                         ("signing key", "Create new audit signing key.",
-                          "Old audit entries can not be verified anymore.")],
+                choices=choices,
                 menu_height=22,
                 cancel='Back',
                 backtitle="privacyIDEA Danger Zone",
-                item_help=1)
+                item_help=True)
 
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("initialize"):
-                    self.privacyidea_initialize()
-                elif tags.startswith("encryption"):
-                    self.privacyidea_enckey()
-                elif tags.startswith("signing"):
-                    self.privacyidea_sign()
+            if menu is not None:
+                menu()
             else:
                 break
-
 
     def privacyidea_admins(self):
         while 1:
