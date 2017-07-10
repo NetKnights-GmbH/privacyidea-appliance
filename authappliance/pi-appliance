@@ -23,6 +23,8 @@ import locale
 import argparse
 import sys
 import time
+from functools import partial
+
 from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          ApacheConfig,
@@ -494,80 +496,79 @@ class DBMenu(object):
 
     def menu(self):
         bt = "Configure the database connection"
+        choices = [(self.db_init, "init tables", "create missing tables"),
+                   (self.redundancy_status, "view redundancy", ""),
+                   (self.setup_redundancy, "setup redundancy", "master master replication"),
+                   (self.stop_redundancy, "stop redundancy", "revert to single database")]
         while 1:
             current_config = self.pConfig.get_DB()
-            code, tags = self.d.menu(
+            menu = self.d.value_menu(
                 "The current database configuration string is %s" % current_config,
-                choices=[("init tables", "create missing tables"),
-                         ("view redundancy", ""),
-                         ("setup redundancy", "master master replication"),
-                         ("stop redundancy", "revert to single database")],
+                choices=choices,
                 cancel='Back',
                 backtitle=bt)
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("init"):
-                    self.db_init()
-                elif tags.startswith("view"):
-                    self.redundancy_status()
-                elif tags.startswith("stop redundancy"):
-                    code = self.d.yesno(
-                        "Do you really want to stop the redundancy? This "
-                        "server will be reverted to a single master. The "
-                        "other master will not be touched. You can simply "
-                        "shut down the other machine.", width=60, height=10
-                    )
-                    if code == self.d.DIALOG_OK:
-                        self.peer.stop_redundancy()
-                elif tags.startswith("setup"):
-                    if self.peer.get_peer_data():
-                        # Now we need to check, if the remote machine is
-                        # running privacyIDEA and MySQL.
-                        try:
-                            self.peer.ssh.set_missing_host_key_policy(
-                                AutoAddPolicy())
-                            self.peer.ssh.connect(str(self.peer.remote_ip),
-                                               username="root",
-                                               password=self.peer.password)
-                            stdin, stdout, stderr = self.peer.ssh.exec_command(
-                                'dpkg -l privacyidea-apache2')
-                            output_pi = stdout.read()
-                            error_pi = stderr.read()
-
-                            stdin, stdout, stderr = self.peer.ssh.exec_command(
-                                'dpkg -l mysql-server')
-                            output_mysql = stdout.read()
-                            error_mysql = stderr.read()
-                            self.peer.ssh.close()
-                            if not output_mysql:
-                                self.d.msgbox(
-                                    "MySQL server not installed on {0!s}. "
-                                    "Please install mysql-server.".format(
-                                    self.peer.remote_ip))
-                                break
-                            if not output_pi:
-                                self.d.msgbox(
-                                    "privacyIDEA not installed on "
-                                    "{0!s}. Please install "
-                                    "privacyidea-apache2.".format(
-                                    self.peer.remote_ip))
-                                break
-                        except SSHException as exx:
-                            self.d.msgbox("{0!s}".format(exx))
-                            break
-
-                        code = self.d.yesno(
-                            "OK. privacyIDEA and MySQL is installed on the "
-                            "remote server. We are ready to setup redundancy. "
-                            "Data will be cloned to the remote server. All "
-                            "privacyIDEA data on the remote server will be "
-                            "lost. Shall we proceed?", width=60)
-                        if code != self.d.DIALOG_OK:
-                            break
-                        else:
-                            self.peer.setup_redundancy()
-
+            if menu is not None:
+                menu()
             else:
                 break
+
+    def setup_redundancy(self):
+        if self.peer.get_peer_data():
+            # Now we need to check, if the remote machine is
+            # running privacyIDEA and MySQL.
+            try:
+                self.peer.ssh.set_missing_host_key_policy(
+                    AutoAddPolicy())
+                self.peer.ssh.connect(str(self.peer.remote_ip),
+                                      username="root",
+                                      password=self.peer.password)
+                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                    'dpkg -l privacyidea-apache2')
+                output_pi = stdout.read()
+                error_pi = stderr.read()
+
+                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                    'dpkg -l mysql-server')
+                output_mysql = stdout.read()
+                error_mysql = stderr.read()
+                self.peer.ssh.close()
+                if not output_mysql:
+                    self.d.msgbox(
+                        "MySQL server not installed on {0!s}. "
+                        "Please install mysql-server.".format(
+                            self.peer.remote_ip))
+                    return
+                if not output_pi:
+                    self.d.msgbox(
+                        "privacyIDEA not installed on "
+                        "{0!s}. Please install "
+                        "privacyidea-apache2.".format(
+                            self.peer.remote_ip))
+                    return
+            except SSHException as exx:
+                self.d.msgbox("{0!s}".format(exx))
+                return
+
+            code = self.d.yesno(
+                "OK. privacyIDEA and MySQL is installed on the "
+                "remote server. We are ready to setup redundancy. "
+                "Data will be cloned to the remote server. All "
+                "privacyIDEA data on the remote server will be "
+                "lost. Shall we proceed?", width=60)
+            if code != self.d.DIALOG_OK:
+                return
+            else:
+                self.peer.setup_redundancy()
+
+    def stop_redundancy(self):
+        code = self.d.yesno(
+            "Do you really want to stop the redundancy? This "
+            "server will be reverted to a single master. The "
+            "other master will not be touched. You can simply "
+            "shut down the other machine.", width=60, height=10
+        )
+        if code == self.d.DIALOG_OK:
+            self.peer.stop_redundancy()
 
     def redundancy_status(self):
         r, bind, server_id = self.db.is_redundant()
@@ -1212,18 +1213,18 @@ class LDAPProxyMenu(object):
     def passthrough_binds(self, cancel_label='Back'):
         while True:
             dns = self.config.passthrough_binds
-            choices = [('Add new Passthrough Bind DN', '')] + [(dn, '') for dn in dns]
-            code, tags = self.d.menu("You can select an existing DN "
+            choices = [(self.add_passthrough_bind, 'Add new Passthrough Bind DN', '')]
+            for dn in dns:
+                choices.append((partial(self.remove_passthrough_bind, dn), dn, ''))
+            menu = self.d.value_menu("You can select an existing DN "
                                      "to delete it or create a new passthrough bind DN",
                                      choices=choices,
                                      backtitle="Manage Passthrough Binds",
                                      cancel=cancel_label)
-            if code != self.d.DIALOG_OK:
-                return True
-            if tags.startswith('Add new Passthrough Bind'):
-                self.add_passthrough_bind()
+            if menu is not None:
+                menu()
             else:
-                self.remove_passthrough_bind(tags)
+                return True
 
     def service_account(self):
         service_account_dn, service_account_password = self.config.service_account
