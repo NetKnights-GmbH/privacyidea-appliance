@@ -1190,7 +1190,7 @@ class LDAPProxyMenu(object):
                                  current=self.config.realm_mapping_strategy,
                                  item_help=True)
         if strategy is None:
-            return
+            return False
         if strategy == 'static':
             current_realm = self.config.realm_mapping_config.get('realm', '')
             code, realm = self.d.inputbox("Please enter the privacyIDEA realm that should be assigned to "
