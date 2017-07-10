@@ -1112,7 +1112,9 @@ class LDAPProxyMenu(object):
     def menu(self):
         while 1:
             if not self.config.exists:
-                self.wizard()
+                # Do not run the wizard in an infinite loop if it is canceled
+                if not self.wizard():
+                    break
             else:
                 code, tags = self.d.menu("LDAP Proxy",
                                          choices=[("Port and Interface", ""),
@@ -1140,16 +1142,31 @@ class LDAPProxyMenu(object):
 
     def wizard(self):
         self.d.msgbox('Welcome to the LDAP Proxy Wizard!') # TODO: Wording
-        self.config.set_default_config()
-        # Add empty service account and empty passthrough DN list, otherwise the config is considered invalid
-        self.config.set_service_account('', '')
-        self.config.set_passthrough_binds([])
-        self.proxy_settings()
-        self.ldap_backend()
-        self.passthrough_binds()
-        # NOTE: Service Account will be configured implicitly by the user mapping or search permissions dialogs!
-        self.user_mapping()
-        self.search_permissions()
+        # This is a list of functions to call sequentially in order to initially configure the LDAP Proxy.
+        # If any of the functions fails (returns False), the user has cancelled the wizard.
+        # The config file is only written if the wizard is completed successfully.
+        steps = [
+            self.proxy_settings,
+            self.ldap_backend,
+            lambda: self.passthrough_binds('Continue'),
+            self.user_mapping,
+            # NOTE: Service Account will be configured implicitly by the user mapping or search permissions dialogs!
+            self.search_permissions,
+        ]
+        with self.config.set_autosave(False):
+            self.config.set_default_config()
+            # Add empty service account and empty passthrough DN list, otherwise the config is considered invalid
+            self.config.set_service_account('', '')
+            self.config.set_passthrough_binds([])
+            # Run through all steps. If any step fails, reset the config and cancel the wizard.
+            for step in steps:
+                if not step():
+                    self.config.reset()
+                    return False
+            # If we reach this, we can finally save the config!
+            self.config.save()
+            self.d.msgbox('Congratulations! You have successfully set up the LDAP proxy.')
+        return True
 
     def user_mapping(self):
         while True:
@@ -1169,7 +1186,7 @@ class LDAPProxyMenu(object):
                                      choices=show_current_choice(mapping_choices, current_mapping_choice),
                                      item_help=True)
             if code != self.d.DIALOG_OK:
-                return
+                return False
             if tags.startswith('match'):
                 current_pattern = self.config.user_mapping_config.get('pattern', '')
                 code, pattern = self.d.inputbox("Please enter a regular expression to match incoming Bind DNs "
@@ -1178,12 +1195,12 @@ class LDAPProxyMenu(object):
                                                 width=70,
                                                 init=current_pattern)
                 if code != self.d.DIALOG_OK:
-                    return
+                    return False
                 self.config.set_user_mapping_config({
                     'strategy': 'match',
                     'pattern': pattern,
                 })
-                return
+                return True
             elif tags.startswith('lookup'):
                 current_attribute = self.config.user_mapping_config.get('attribute', '')
                 code, attribute = self.d.inputbox("Please enter the LDAP attribute which "
@@ -1191,7 +1208,7 @@ class LDAPProxyMenu(object):
                                                   width=70,
                                                   init=current_attribute)
                 if code != self.d.DIALOG_OK:
-                    return
+                    return False
                 self.config.set_user_mapping_config({
                     'strategy': 'lookup',
                     'attribute': attribute,
@@ -1202,13 +1219,14 @@ class LDAPProxyMenu(object):
                     self.d.msgbox('In order to use the "lookup" mapping strategy, a service account needs to be '
                                   'configured in the following.',
                                   width=70)
-                    self.service_account()
-                return
+                    return self.service_account()
+                else:
+                    return True
             else:
                 raise NotImplementedError()
 
 
-    def passthrough_binds(self):
+    def passthrough_binds(self, cancel_label='Back'):
         while True:
             dns = self.config.passthrough_binds
             choices = [('Add new Passthrough Bind DN', '')] + [(dn, '') for dn in dns]
@@ -1216,9 +1234,9 @@ class LDAPProxyMenu(object):
                                      "to delete it or create a new passthrough bind DN",
                                      choices=choices,
                                      backtitle="Manage Passthrough Binds",
-                                     cancel='Back')
+                                     cancel=cancel_label)
             if code != self.d.DIALOG_OK:
-                return
+                return True
             if tags.startswith('Add new Passthrough Bind'):
                 self.add_passthrough_bind()
             else:
@@ -1230,17 +1248,18 @@ class LDAPProxyMenu(object):
                                    init=service_account_dn,
                                    width=60)
         if code != self.d.DIALOG_OK:
-            return
+            return False
         code, password = self.d.passwordbox('Please enter the password of the Service Account:\n'
                                             '(your typing will not be visible)',
                                             width=60)
         if code != self.d.DIALOG_OK:
-            return
+            return False
         # if the given password is empty, the user probably wants to re-use the currently set password
         # TODO: What if the password is intentionally empty?
         if not password:
             password = service_account_password
         self.config.set_service_account(dn, password)
+        return True
 
     def add_passthrough_bind(self):
         code, dn = self.d.inputbox('Please enter the Distinguished Name for which LDAP Bind Requests '
@@ -1261,15 +1280,16 @@ class LDAPProxyMenu(object):
         port = self._ask_for_ldap_port('Please enter the port to serve the LDAP proxy on (default: 389):',
                                        init=current_port)
         if port is None:
-            return
+            return False
         code, interface = self.d.inputbox('Please enter the interface to serve the LDAP proxy on (leave '
                                                          'blank to listen on all interfaces):',
                                            init=current_interface)
         if code != self.d.DIALOG_OK:
-            return
+            return False
         # TODO: Test connection?
         endpoint = self._build_server_endpoint_string(port, interface)
         self.config.set_proxy_endpoint(endpoint)
+        return True
 
     def _ask_for_ldap_port(self, message, init=''):
         while True:
@@ -1290,11 +1310,11 @@ class LDAPProxyMenu(object):
         code, host = self.d.inputbox('Please enter the IP address of the LDAP backend:',
                                      init=current_host)
         if code != self.d.DIALOG_OK:
-            return
+            return False
         port = self._ask_for_ldap_port('Please enter the port to connect to (default: 389):',
                                        init=current_port)
         if port is None:
-            return
+            return False
         protocol_choices = [('LDAP', 'unencrypted LDAP'),
 #                           ('STARTTLS', 'LDAP and opportunistic TLS'),
                             # TODO: STARTTLS not yet supported
@@ -1306,13 +1326,14 @@ class LDAPProxyMenu(object):
         code, protocol_choice = self.d.menu('Please choose the protocol to use for the connection:',
                                             choices=show_current_choice(protocol_choices, current_protocol_choice))
         if code != self.d.DIALOG_OK:
-            return
+            return False
         # strip the (current)
         protocol = protocol_choice.split(' ')[0]
         # TODO: give trust roots
         endpoint = self._build_client_endpoint_string(protocol, host, port)
         self.config.set_backend_endpoint(endpoint)
         # TODO: We could actually test the connection here!
+        return True
 
     def search_permissions(self):
         choices = [
@@ -1337,11 +1358,13 @@ class LDAPProxyMenu(object):
                                  item_help=True,
                                  width=70)
         if code != self.d.DIALOG_OK:
-            return
+            return False
         if tags.startswith('no searches'):
             self.config.set_search_permissions(False, False)
+            return True
         elif tags.startswith('only searches'):
             self.config.set_search_permissions(True, False)
+            return True
         elif tags.startswith('all searches'):
             self.config.set_search_permissions(True, True)
             # display disclaimer
@@ -1356,7 +1379,9 @@ class LDAPProxyMenu(object):
                 self.d.msgbox('In order to forward all searches to the LDAP backend, a service account needs to be '
                               'configured in the following.',
                               width=70)
-                self.service_account()
+                return self.service_account()
+            else:
+                return True
         else:
             raise NotImplementedError()
 

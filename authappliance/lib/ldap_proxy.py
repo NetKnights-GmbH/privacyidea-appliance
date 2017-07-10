@@ -1,4 +1,5 @@
 import socket
+from contextlib import contextmanager
 
 import os
 import re
@@ -55,6 +56,10 @@ def extract_from_endpoint(endpoint, attribute):
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
         self.filename = filename
+        self.reset()
+        self.autosave_enabled = True
+
+    def reset(self):
         if self.exists:
             self.config = load_config(self.filename)  # TODO: This exits if config is malformed!
         else:
@@ -79,15 +84,42 @@ class LDAPProxyConfig(object):
                                                                # Or disable validation entirely?
             'certificate': privacyidea_cert,
         }
-
+        self.autosave()
 
     @property
     def exists(self):
         return os.path.exists(self.filename)
 
     def save(self):
+        """
+        Save configuration (i.e. write it to the disk).
+        """
         with open(self.filename, 'w') as f:
             self.config.write(f)
+
+    def autosave(self):
+        """
+        Save configuration, but only if autosave is enabled.
+        """
+        if self.autosave_enabled:
+            self.save()
+
+    @contextmanager
+    def set_autosave(self, autosave_enabled):
+        """
+        Context manager that can be used to temporarily disable config autosaving::
+
+            with c.set_autosave(False):
+                # ...
+                # all operations here will not automatically save the config
+                # but this will:
+                c.save()
+
+        """
+        old_value = self.autosave_enabled
+        self.autosave_enabled = autosave_enabled
+        yield
+        self.autosave_enabled = old_value
 
     @property
     def backend_settings(self):
@@ -110,7 +142,7 @@ class LDAPProxyConfig(object):
 
     def set_backend_endpoint(self, endpoint):
         self.config.setdefault('ldap-backend', {})['endpoint'] = endpoint
-        self.save()
+        self.autosave()
 
     @property
     def proxy_settings(self):
@@ -126,7 +158,7 @@ class LDAPProxyConfig(object):
 
     def set_proxy_endpoint(self, endpoint):
         self.config.setdefault('ldap-proxy', {})['endpoint'] = endpoint
-        self.save()
+        self.autosave()
 
     @property
     def passthrough_binds(self):
@@ -134,7 +166,7 @@ class LDAPProxyConfig(object):
 
     def set_passthrough_binds(self, passthrough_binds):
         self.config.setdefault('ldap-proxy', {})['passthrough-binds'] = passthrough_binds
-        self.save()
+        self.autosave()
 
     def add_passthrough_bind(self, dn):
         passthrough_binds = self.passthrough_binds
@@ -156,7 +188,7 @@ class LDAPProxyConfig(object):
             'dn': dn,
             'password': password
         }
-        self.save()
+        self.autosave()
 
     @property
     def user_mapping_strategy(self):
@@ -168,7 +200,7 @@ class LDAPProxyConfig(object):
 
     def set_user_mapping_config(self, config):
         self.config['user-mapping'] = config
-        self.save()
+        self.autosave()
 
     @property
     def search_permissions(self):
@@ -180,4 +212,4 @@ class LDAPProxyConfig(object):
         ldap_proxy_settings = self.config.setdefault('ldap-proxy', {})
         ldap_proxy_settings['allow-search'] = allow_search
         ldap_proxy_settings['bind-service-account'] = bind_service_account
-        self.save()
+        self.autosave()
