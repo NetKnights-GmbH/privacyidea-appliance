@@ -67,6 +67,13 @@ def reset_services_for_restart():
     """
     services_for_restart.clear()
 
+def show_current_choice(choices, current_index):
+    """
+    Given a dialog-compatible list of choices, highlight the current choice identified by index ``current_index``
+    and return the new list of choices.
+    """
+    return [(choice[0] + (' (current)' if current_index == index else ''),) + choice[1:]
+            for index, choice in enumerate(choices)]
 
 class WebserverMenu(object):
 
@@ -1112,7 +1119,8 @@ class LDAPProxyMenu(object):
                                                   ("LDAP Backend", ""),
                                                   ("Passthrough Binds", ""),
                                                   ("Service Account", ""),
-                                                  ("User Mapping", "")],
+                                                  ("User Mapping", ""),
+                                                  ("Search Permissions", "")],
                                          cancel='Back')
                 if code == self.d.DIALOG_OK:
                     if tags.startswith("LDAP Backend"):
@@ -1125,6 +1133,8 @@ class LDAPProxyMenu(object):
                         self.service_account()
                     elif tags.startswith("User Mapping"):
                         self.user_mapping()
+                    elif tags.startswith("Search Permissions"):
+                        self.search_permissions()
                 else:
                     break
 
@@ -1137,8 +1147,9 @@ class LDAPProxyMenu(object):
         self.proxy_settings()
         self.ldap_backend()
         self.passthrough_binds()
-        # NOTE: Service Account will be configured implicitly by the user mapping dialog!
+        # NOTE: Service Account will be configured implicitly by the user mapping or search permissions dialogs!
         self.user_mapping()
+        self.search_permissions()
 
     def user_mapping(self):
         while True:
@@ -1147,10 +1158,15 @@ class LDAPProxyMenu(object):
                 note = 'Current mapping strategy: {}.'.format(current_strategy)
             else:
                 note = 'Currently, no mapping strategy is set.'
+            mapping_choices = [('match', '', 'Extract username from DN using a regular expression'),
+                               ('lookup', '', 'Extract username from a LDAP attribute')]
+            current_mapping_choice = {
+                'match': 0,
+                'lookup': 1,
+            }[self.config.user_mapping_strategy]
             code, tags = self.d.menu("Please select the strategy that should be used to map "
                                      "Bind DNs to privacyIDEA usernames\n{}".format(note),
-                                     choices=[('match', '', 'Extract username from DN using a regular expression'),
-                                              ('lookup', '', 'Extract username from a LDAP attribute')],
+                                     choices=show_current_choice(mapping_choices, current_mapping_choice),
                                      item_help=True)
             if code != self.d.DIALOG_OK:
                 return
@@ -1279,17 +1295,68 @@ class LDAPProxyMenu(object):
                                        init=current_port)
         if port is None:
             return
+        protocol_choices = [('LDAP', 'unencrypted LDAP'),
+#                           ('STARTTLS', 'LDAP and opportunistic TLS'),
+                            # TODO: STARTTLS not yet supported
+                            ('LDAPS', 'LDAP over TLS')]
+        current_protocol_choice = {
+            'LDAP': 0,
+            'LDAPS': 1
+        }.get(current_protocol, -1)
         code, protocol = self.d.menu('Please choose the protocol to use for the connection:',
-                                     choices=[('LDAP', 'unencrypted LDAP'),
- #                                             ('STARTTLS', 'LDAP and opportunistic TLS'),
-                                              #  TODO: STARTTLS not yet supported
-                                              ('LDAPS', 'LDAP over TLS')])
+                                     choices=show_current_choice(protocol_choices, current_protocol_choice))
         if code != self.d.DIALOG_OK:
             return
         # TODO: give trust roots
         endpoint = self._build_client_endpoint_string(protocol, host, port)
         self.config.set_backend_endpoint(endpoint)
         # TODO: We could actually test the connection here!
+
+    def search_permissions(self):
+        choices = [
+                # allow-search = false, bind-service-account = false
+                ('no searches are forwarded', '',
+                    'LDAP searches are never forwarded to the backend.'),
+                # allow-search = true, bind-service-account = false
+                ('only searches by passthrough DNs are forwarded', '',
+                    'Only LDAP searches by users listed in "Passthrough DNs" are forwarded to the backend.'),
+                # allow-search = true, bind-service-account = true
+                ('all searches are forwarded', '',
+                    'All authenticated users can issue LDAP searches after authentication.')]
+        # (allow-search, bind-service-account)
+        current_choice = {
+            (False, False): 0,
+            (True, False): 1,
+            (True, True): 2
+        }.get(self.config.search_permissions, -1)
+        # TODO: What to do if the user has set allow-search=False, bind-service-account=True?
+        code, tags = self.d.menu('Please choose how incoming LDAP Search Requests should be handled by the LDAP Proxy.',
+                                 choices=show_current_choice(choices, current_choice),
+                                 item_help=True,
+                                 width=70)
+        if code != self.d.DIALOG_OK:
+            return
+        if tags.startswith('no searches'):
+            self.config.set_search_permissions(False, False)
+        elif tags.startswith('only searches'):
+            self.config.set_search_permissions(True, False)
+        elif tags.startswith('all searches'):
+            self.config.set_search_permissions(True, True)
+            # display disclaimer
+            self.d.msgbox('From now on, all searches by authenticated users are forwarded to the LDAP server. '
+                          'Please note that this is accomplished by forwarding search requests '
+                          'to the LDAP backend in the context of the service account, which may constitute '
+                          'an information leak!',
+                          width=70)
+            # Ensure that there is a service account set
+            service_account_dn, service_account_password = self.config.service_account
+            if not service_account_dn:
+                self.d.msgbox('In order to forward all searches to the LDAP backend, a service account needs to be '
+                              'configured in the following.',
+                              width=70)
+                self.service_account()
+        else:
+            raise NotImplementedError()
 
     def _build_client_endpoint_string(self, protocol, host, port):
         prefix = {'LDAP': 'tcp', 'LDAPS': 'tls'}[protocol]

@@ -169,3 +169,15 @@ class LDAPProxyConfig(object):
     def set_user_mapping_config(self, config):
         self.config['user-mapping'] = config
         self.save()
+
+    @property
+    def search_permissions(self):
+        ldap_proxy_settings = self.config.setdefault('ldap-proxy', {})
+        return (ldap_proxy_settings.get('allow-search', False),
+                ldap_proxy_settings.get('bind-service-account', False))
+
+    def set_search_permissions(self, allow_search, bind_service_account):
+        ldap_proxy_settings = self.config.setdefault('ldap-proxy', {})
+        ldap_proxy_settings['allow-search'] = allow_search
+        ldap_proxy_settings['bind-service-account'] = bind_service_account
+        self.save()
