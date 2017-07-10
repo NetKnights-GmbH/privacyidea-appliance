@@ -1170,7 +1170,7 @@ class LDAPProxyMenu(object):
                                      item_help=True)
             if code != self.d.DIALOG_OK:
                 return
-            if tags == 'match':
+            if tags.startswith('match'):
                 current_pattern = self.config.user_mapping_config.get('pattern', '')
                 code, pattern = self.d.inputbox("Please enter a regular expression to match incoming Bind DNs "
                                                 "against. The pattern should have one capturing group, which is "
@@ -1184,7 +1184,7 @@ class LDAPProxyMenu(object):
                     'pattern': pattern,
                 })
                 return
-            elif tags == 'lookup':
+            elif tags.startswith('lookup'):
                 current_attribute = self.config.user_mapping_config.get('attribute', '')
                 code, attribute = self.d.inputbox("Please enter the LDAP attribute which "
                                                   "contains the privacyIDEA username.",
@@ -1303,10 +1303,12 @@ class LDAPProxyMenu(object):
             'LDAP': 0,
             'LDAPS': 1
         }.get(current_protocol, -1)
-        code, protocol = self.d.menu('Please choose the protocol to use for the connection:',
-                                     choices=show_current_choice(protocol_choices, current_protocol_choice))
+        code, protocol_choice = self.d.menu('Please choose the protocol to use for the connection:',
+                                            choices=show_current_choice(protocol_choices, current_protocol_choice))
         if code != self.d.DIALOG_OK:
             return
+        # strip the (current)
+        protocol = protocol_choice.split(' ')[0]
         # TODO: give trust roots
         endpoint = self._build_client_endpoint_string(protocol, host, port)
         self.config.set_backend_endpoint(endpoint)
