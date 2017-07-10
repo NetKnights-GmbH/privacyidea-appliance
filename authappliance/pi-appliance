@@ -1163,7 +1163,7 @@ class LDAPProxyMenu(object):
             current_mapping_choice = {
                 'match': 0,
                 'lookup': 1,
-            }[self.config.user_mapping_strategy]
+            }.get(self.config.user_mapping_strategy, -1)
             code, tags = self.d.menu("Please select the strategy that should be used to map "
                                      "Bind DNs to privacyIDEA usernames\n{}".format(note),
                                      choices=show_current_choice(mapping_choices, current_mapping_choice),
