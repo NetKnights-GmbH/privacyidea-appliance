@@ -72,10 +72,6 @@ class LDAPProxyConfig(object):
         """
         self.config['bind-cache'] = {'enabled': False}
         self.config['app-cache'] = {'enabled': False}
-        self.config['realm-mapping'] = {
-            'strategy': 'static',
-            'realm': '',
-        } # TODO: Make realm mapping configurable
         self.config.setdefault('ldap-backend', {})['use-tls'] = False
         self.config.setdefault('ldap-backend', {})['test-connection'] = False # TODO
         privacyidea_cert, _ = ApacheConfig().get_certificates()
@@ -200,6 +196,18 @@ class LDAPProxyConfig(object):
 
     def set_user_mapping_config(self, config):
         self.config['user-mapping'] = config
+        self.autosave()
+
+    @property
+    def realm_mapping_strategy(self):
+        return self.realm_mapping_config.get('strategy', '')
+
+    @property
+    def realm_mapping_config(self):
+        return self.config.get('realm-mapping', {})
+
+    def set_realm_mapping_config(self, config):
+        self.config['realm-mapping'] = config
         self.autosave()
 
     @property

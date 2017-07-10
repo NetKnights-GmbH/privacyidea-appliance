@@ -1088,6 +1088,7 @@ class LDAPProxyMenu(object):
                    (self.passthrough_binds, "Passthrough Binds", ""),
                    (self.service_account, "Service Account", ""),
                    (self.user_mapping, "User Mapping", ""),
+                   (self.realm_mapping, "Realm Mapping", ""),
                    (self.search_permissions, "Search Permissions", "")]
         while 1:
             if not self.config.exists:
@@ -1113,6 +1114,7 @@ class LDAPProxyMenu(object):
             self.ldap_backend,
             lambda: self.passthrough_binds('Continue'),
             self.user_mapping,
+            self.realm_mapping,
             # NOTE: Service Account will be configured implicitly by the user mapping or search permissions dialogs!
             self.search_permissions,
         ]
@@ -1133,15 +1135,10 @@ class LDAPProxyMenu(object):
 
     def user_mapping(self):
         while True:
-            current_strategy = self.config.user_mapping_strategy
-            if current_strategy:
-                note = 'Current mapping strategy: {}.'.format(current_strategy)
-            else:
-                note = 'Currently, no mapping strategy is set.'
             mapping_choices = [('match', 'match', '', 'Extract username from DN using a regular expression'),
                                ('lookup', 'lookup', '', 'Extract username from a LDAP attribute')]
             strategy = self.d.choice("Please select the strategy that should be used to map "
-                                     "Bind DNs to privacyIDEA usernames\n{}".format(note),
+                                     "Bind DNs to privacyIDEA usernames",
                                      choices=mapping_choices,
                                      current=self.config.user_mapping_strategy,
                                      item_help=True)
@@ -1185,6 +1182,31 @@ class LDAPProxyMenu(object):
             else:
                 raise NotImplementedError()
 
+    def realm_mapping(self):
+        mapping_choices = [('static', 'static', '', 'Statically assign the same realm to all users')]
+        strategy = self.d.choice('Please select the strategy according to which privacyIDEA realms '
+                                 'should be assigned to authentication requests.',
+                                 choices=mapping_choices,
+                                 current=self.config.realm_mapping_strategy,
+                                 item_help=True)
+        if strategy is None:
+            return
+        if strategy == 'static':
+            current_realm = self.config.realm_mapping_config.get('realm', '')
+            code, realm = self.d.inputbox("Please enter the privacyIDEA realm that should be assigned to "
+                                          "all authentication requests. You can also leave it blank to use "
+                                          "the privacyIDEA default realm.",
+                                          width=70,
+                                          init=current_realm)
+            if code != self.d.DIALOG_OK:
+                return False
+            self.config.set_realm_mapping_config({
+                'strategy': 'static',
+                'realm': realm
+            })
+            return True
+        else:
+            raise NotImplementedError()
 
     def passthrough_binds(self, cancel_label='Back'):
         while True:
