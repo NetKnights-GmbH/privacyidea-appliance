@@ -5,45 +5,48 @@ import os
 import re
 
 import configobj
+import sys
 import validate
-from pi_ldapproxy.config import load_config
 
 from authappliance.lib.appliance import ApacheConfig
 
-LDAP_PROXY_CONFIG_FILE = '/etc/privacyidea/proxy.ini'
+LDAP_PROXY_CONFIG_FILE = '/etc/privacyidea-ldap-proxy/proxy.ini'
 
-DEFAULT_PROXY_CONFIG = """
+CONFIG_SPEC = """
 [privacyidea]
-instance = http://10.0.0.1
+instance = string
+certificate = string(default='')
 
 [ldap-backend]
-endpoint = tcp:host=10.0.0.2:port=389
-use-tls = false
-test-connection = true
-
-[service-account]
-dn =
-password =
+endpoint = string
+use-tls = boolean
+test-connection = boolean(default=True)
 
 [ldap-proxy]
-endpoint =
-passthrough-binds =
-bind-service-account =
-allow-search =
+endpoint = string
+passthrough-binds = force_list
+bind-service-account = boolean(default=False)
+allow-search = boolean(default=False)
 
-[user-mapping]
-strategy =
-pattern =
-
-[realm-mapping]
-strategy = static
-realm =
+[service-account]
+dn = string
+password = string
 
 [bind-cache]
-enabled = false
+enabled = boolean
+timeout = integer(default=3)
 
 [app-cache]
-enabled = false
+enabled = boolean
+timeout = integer(default=3)
+attribute = string(default='objectclass')
+value-prefix = string(default='App-')
+
+[user-mapping]
+strategy = string
+
+[realm-mapping]
+strategy = string
 """
 
 def extract_from_endpoint(endpoint, attribute):
@@ -53,6 +56,17 @@ def extract_from_endpoint(endpoint, attribute):
     else:
         return ''
 
+def _load_config(filename):
+    with open(filename, 'r') as f:
+        config = configobj.ConfigObj(f, configspec=CONFIG_SPEC.splitlines())
+
+    validator = validate.Validator()
+    result = config.validate(validator, preserve_errors=True)
+    if result != True:
+        print('Invalid LDAP Proxy configuration at {!r}: {!r}'.format(filename, result))
+        sys.exit(1)
+    return config
+
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
         self.filename = filename
@@ -61,7 +75,7 @@ class LDAPProxyConfig(object):
 
     def reset(self):
         if self.exists:
-            self.config = load_config(self.filename)  # TODO: This exits if config is malformed!
+            self.config = _load_config(self.filename)  # TODO: This exits if config is malformed!
         else:
             self.config = configobj.ConfigObj()
 
