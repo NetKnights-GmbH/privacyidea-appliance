@@ -32,7 +32,7 @@ from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG,
                                          CRON_USER, AUDIT_CMD, BACKUP_CMD, RemoteMySQLConfig, SERVICE_APACHE,
-                                         SERVICE_FREERADIUS)
+                                         SERVICE_FREERADIUS, SERVICE_LDAP_PROXY)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
@@ -1131,6 +1131,9 @@ class LDAPProxyMenu(object):
         self.service.stop()
         self.service.disable()
 
+    def mark_for_restart(self):
+        mark_service_for_restart(SERVICE_LDAP_PROXY)
+
     def wizard(self):
         self.d.msgbox('Welcome to the LDAP Proxy Wizard!') # TODO: Wording
         # This is a list of functions to call sequentially in order to initially configure the LDAP Proxy.
@@ -1184,6 +1187,7 @@ class LDAPProxyMenu(object):
                     'strategy': 'match',
                     'pattern': pattern,
                 })
+                self.mark_for_restart()
                 return True
             elif strategy == 'lookup':
                 current_attribute = self.config.user_mapping_config.get('attribute', '')
@@ -1197,6 +1201,7 @@ class LDAPProxyMenu(object):
                     'strategy': 'lookup',
                     'attribute': attribute,
                 })
+                self.mark_for_restart()
                 # Ensure that there is a service account set
                 service_account_dn, service_account_password = self.config.service_account
                 if not service_account_dn:
@@ -1232,6 +1237,7 @@ class LDAPProxyMenu(object):
                 'strategy': 'static',
                 'realm': realm
             })
+            self.mark_for_restart()
             return True
         else:
             raise NotImplementedError()
@@ -1269,6 +1275,7 @@ class LDAPProxyMenu(object):
         if not password:
             password = service_account_password
         self.config.set_service_account(dn, password)
+        self.mark_for_restart()
         return True
 
     def add_passthrough_bind(self):
@@ -1278,12 +1285,14 @@ class LDAPProxyMenu(object):
         if code != self.d.DIALOG_OK:
             return
         self.config.add_passthrough_bind(dn)
+        self.mark_for_restart()
 
     def remove_passthrough_bind(self, dn):
         code = self.d.yesno("Do you really want to delete the Passthrough Bind DN\n{}?".format(dn),
                             width=60)
         if code == self.d.DIALOG_OK:
             self.config.remove_passthrough_bind(dn)
+            self.mark_for_restart()
 
     def proxy_settings(self):
         current_port, current_interface = self.config.proxy_settings
@@ -1299,6 +1308,7 @@ class LDAPProxyMenu(object):
         # TODO: Test connection?
         endpoint = self._build_server_endpoint_string(port, interface)
         self.config.set_proxy_endpoint(endpoint)
+        self.mark_for_restart()
         return True
 
     def _ask_for_ldap_port(self, message, init=''):
@@ -1336,6 +1346,7 @@ class LDAPProxyMenu(object):
         # TODO: give trust roots
         endpoint = self._build_client_endpoint_string(protocol, host, port)
         self.config.set_backend_endpoint(endpoint)
+        self.mark_for_restart()
         # TODO: We could actually test the connection here!
         return True
 
@@ -1364,6 +1375,7 @@ class LDAPProxyMenu(object):
             return False
         allow_search, bind_service_account = choice
         self.config.set_search_permissions(allow_search, bind_service_account)
+        self.mark_for_restart()
         if allow_search and bind_service_account:
             # display disclaimer
             self.d.msgbox('From now on, all searches by authenticated users are forwarded to the LDAP server. '

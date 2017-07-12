@@ -45,6 +45,7 @@ AUDIT_CMD = "pi-manage rotate_audit "
 
 SERVICE_APACHE = 'apache2'
 SERVICE_FREERADIUS = 'freeradius'
+SERVICE_LDAP_PROXY = 'privacyidea-ldap-proxy'
 
 def generate_password(size=6, characters=string.ascii_lowercase +
                       string.ascii_uppercase + string.digits):
@@ -536,12 +537,20 @@ class OSConfig(object):
     @classmethod
     def restart(cls, service=None, do_print=False, action="restart"):
         '''
-        Restart the webserver
+        Restart the webserver or another service.
+
+        This functions restarts the service using
+         * the `service` tool, if /etc/init.d/<service> exists
+         * the `systemctl` tool otherwise
+
+        :param service: Service to restart, defaults to apache
         '''
         service = service or SERVICE_APACHE
-        p = Popen(['sudo', 'service',
-                   service,
-                   action],
+        if os.path.exists(os.path.join('/etc/init.d', service)):
+            commandline = ['sudo', 'service', service, action]
+        else:
+            commandline = ['sudo', 'systemctl', action, service]
+        p = Popen(commandline,
                   stdin=PIPE,
                   stdout=PIPE,
                   stderr=PIPE)
