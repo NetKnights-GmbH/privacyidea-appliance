@@ -91,6 +91,20 @@ class LDAPProxyConfig(object):
                 os.makedirs(directory)
             self.config = configobj.ConfigObj()
 
+    @property
+    def initialized(self):
+        if self.exists:
+            self.reset() # ?
+            protocol, host, port = self.backend_settings
+            if host == '192.0.2.1':
+                # this host is used in the default config shipped with the ldap-proxy ubuntu package
+                return False
+            else:
+                # otherwise, someone has done something with the configuration
+                return True
+        else:
+            return False
+
     def set_default_config(self):
         """
         set all config options that are not configurable by any accessor methods below

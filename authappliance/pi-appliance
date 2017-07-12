@@ -1104,25 +1104,27 @@ class LDAPProxyMenu(object):
                                 (self.search_permissions, "Search Permissions", "")])
             else:
                 choices.append((self.enable_service, "Enable LDAP Proxy", ""))
-            if not self.config.exists:
-                # Do not run the wizard in an infinite loop if it is canceled
-                if not self.wizard():
-                    break
+            menu = self.d.value_menu("LDAP Proxy",
+                                     choices=choices,
+                                     cancel='Back')
+            if menu is not None:
+                menu()
             else:
-                menu = self.d.value_menu("LDAP Proxy",
-                                         choices=choices,
-                                         cancel='Back')
-                if menu is not None:
-                    menu()
-                else:
-                    break
+                break
 
     def restart_service(self):
         if not self.service.restart():
             self.d.msgbox("Could not restart the LDAP Proxy.")
 
     def enable_service(self):
-        """ enable and start the LDAP proxy """
+        """
+        Enable and start the LDAP proxy.
+        However, check if the config is initialized first. If not, run the wizard and enable it afterwards.
+        """
+        if not self.config.initialized:
+            # Don't proceed if the wizard has been canceled
+            if not self.wizard():
+                return
         self.service.enable()
         self.restart_service()
 
