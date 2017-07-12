@@ -554,7 +554,6 @@ class OSConfig(object):
             if do_print:
                 print _err
 
-
 class ApacheConfig(object):
 
     def __init__(self, filename=None):

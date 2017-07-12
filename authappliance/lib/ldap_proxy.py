@@ -6,11 +6,19 @@ import re
 
 import configobj
 import sys
+
+import subprocess
+
+import dbus
 import validate
+from dbus import DBusException
 
 from authappliance.lib.appliance import ApacheConfig
 
 LDAP_PROXY_CONFIG_FILE = '/etc/privacyidea-ldap-proxy/proxy.ini'
+LDAP_PROXY_UNIT_FILE = 'privacyidea-ldap-proxy.service'
+
+SYSTEMD_MANAGER_INTERFACE = 'org.freedesktop.systemd1.Manager'
 
 CONFIG_SPEC = """
 [privacyidea]
@@ -239,3 +247,59 @@ class LDAPProxyConfig(object):
         ldap_proxy_settings['allow-search'] = allow_search
         ldap_proxy_settings['bind-service-account'] = bind_service_account
         self.autosave()
+
+class LDAPProxyService(object):
+    def __init__(self):
+        self.bus = dbus.SystemBus()
+        self.proxy = self.bus.get_object('org.freedesktop.systemd1',
+                                         '/org/freedesktop/systemd1')
+        self.manager = dbus.Interface(self.proxy,
+                                      dbus_interface=SYSTEMD_MANAGER_INTERFACE)
+
+    def _get_enablement_status(self):
+        return self.manager.GetUnitFileState(LDAP_PROXY_UNIT_FILE)
+
+    def _get_unit(self):
+        path = self.proxy.GetUnit(LDAP_PROXY_UNIT_FILE,
+                                  dbus_interface=SYSTEMD_MANAGER_INTERFACE)
+        return self.bus.get_object('org.freedesktop.systemd1', path)
+
+    @property
+    def enabled(self):
+        return self._get_enablement_status() == 'enabled'
+
+    def enable(self):
+        self.manager.EnableUnitFiles([LDAP_PROXY_UNIT_FILE], False, False)
+        # TODO: check return value?
+
+    def disable(self):
+        self.manager.DisableUnitFiles([LDAP_PROXY_UNIT_FILE], False)
+
+    @property
+    def active(self):
+        try:
+            unit = self._get_unit()
+        except DBusException:
+            # If the unit does not exist, it is inactive
+            return False
+        state = unit.Get('org.freedesktop.systemd1.Unit', 'ActiveState',
+                         dbus_interface='org.freedesktop.DBus.Properties')
+        # TODO: Should we rather only check for 'active'?
+        return state in ('active', 'reloading', 'activating')
+
+    def _invoke_systemctl(self, arguments):
+        proc = subprocess.Popen(['systemctl'] + arguments,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        return proc.wait() == 0
+
+    def restart(self):
+        """ restart he unit. If it is inactive, it will be started. """
+        # NOTE: We do not use the dbus interface here because
+        # using `systemctl restart` has the advantage that we wait
+        # until the unit is actually restarted.
+        return self._invoke_systemctl(['restart', LDAP_PROXY_UNIT_FILE])
+
+    def stop(self):
+        return self._invoke_systemctl(['stop', LDAP_PROXY_UNIT_FILE])
+

@@ -46,7 +46,7 @@ import os
 from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
-from authappliance.lib.ldap_proxy import LDAPProxyConfig
+from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -1082,16 +1082,28 @@ class LDAPProxyMenu(object):
         self.app = app
         self.d = dialog
         self.config = LDAPProxyConfig()
+        self.service = LDAPProxyService()
 
     def menu(self):
-        choices = [(self.proxy_settings, "Port and Interface", ""),
-                   (self.ldap_backend, "LDAP Backend", ""),
-                   (self.passthrough_binds, "Passthrough Binds", ""),
-                   (self.service_account, "Service Account", ""),
-                   (self.user_mapping, "User Mapping", ""),
-                   (self.realm_mapping, "Realm Mapping", ""),
-                   (self.search_permissions, "Search Permissions", "")]
         while 1:
+            choices = []
+            if self.service.enabled:
+                if not self.service.active:
+                    restart_label = "Start LDAP Proxy"
+                else:
+                    restart_label = "Restart LDAP Proxy"
+                choices.extend([(self.restart_service, restart_label, ""),
+                                (self.disable_service, "Disable LDAP Proxy", ""),
+                                (lambda: None, "=" * 40, ""),
+                                (self.proxy_settings, "Port and Interface", ""),
+                                (self.ldap_backend, "LDAP Backend", ""),
+                                (self.passthrough_binds, "Passthrough Binds", ""),
+                                (self.service_account, "Service Account", ""),
+                                (self.user_mapping, "User Mapping", ""),
+                                (self.realm_mapping, "Realm Mapping", ""),
+                                (self.search_permissions, "Search Permissions", "")])
+            else:
+                choices.append((self.enable_service, "Enable LDAP Proxy", ""))
             if not self.config.exists:
                 # Do not run the wizard in an infinite loop if it is canceled
                 if not self.wizard():
@@ -1104,6 +1116,20 @@ class LDAPProxyMenu(object):
                     menu()
                 else:
                     break
+
+    def restart_service(self):
+        if not self.service.restart():
+            self.d.msgbox("Could not restart the LDAP Proxy.")
+
+    def enable_service(self):
+        """ enable and start the LDAP proxy """
+        self.service.enable()
+        self.restart_service()
+
+    def disable_service(self):
+        """ disable and stop the LDAP proxy """
+        self.service.stop()
+        self.service.disable()
 
     def wizard(self):
         self.d.msgbox('Welcome to the LDAP Proxy Wizard!') # TODO: Wording
