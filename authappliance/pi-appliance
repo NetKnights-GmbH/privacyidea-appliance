@@ -943,6 +943,10 @@ class RadiusMenu(object):
             # No Radius Server available
             self.RadiusConfig = None
 
+    @property
+    def should_display(self):
+        return bool(self.RadiusConfig)
+
     def menu(self):
         choices = [(self.clients, "client config", ""),
                    (self.sites, "sites", "Enable and disable RADIUS sites")]
@@ -1083,6 +1087,10 @@ class LDAPProxyMenu(object):
         self.d = dialog
         self.config = LDAPProxyConfig()
         self.service = LDAPProxyService()
+
+    @property
+    def should_display(self):
+        return self.config.exists
 
     def menu(self):
         while 1:
@@ -1453,7 +1461,7 @@ class MainMenu(object):
                     "privacyIDEA", "",
                     "Configure privacyIDEA application stuff like administrators.")
                    ]
-        if self.radiusDialog.RadiusConfig:
+        if self.radiusDialog.should_display:
             choices.append((self.radiusDialog.menu,
                             "FreeRADIUS", "",
                             "Configure RADIUS settings like the RADIUS clients."))
@@ -1471,9 +1479,10 @@ class MainMenu(object):
                         "Audit Rotation", "",
                         "Define times when to check if the Audit log should "
                         "be rotated."))
-        choices.append((self.ldap_proxy_dialog.menu,
-                        "LDAP Proxy", "",
-                        "Configure a local instance of the privacyIDEA LDAP Proxy"))
+        if self.ldap_proxy_dialog.should_display:
+            choices.append((self.ldap_proxy_dialog.menu,
+                            "LDAP Proxy", "",
+                            "Configure a local instance of the privacyIDEA LDAP Proxy"))
 
         while 1:
             menu = self.d.value_menu("Which subject do you want to configure?",
