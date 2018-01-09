@@ -102,10 +102,6 @@ class LDAPProxyConfig(object):
         if self.exists:
             self.config = _load_config(self.filename)  # TODO: This exits if config is malformed!
         else:
-            # Create config directory if it does not exist
-            directory = os.path.dirname(self.filename)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
             self.config = configobj.ConfigObj()
 
     @property
