@@ -5,3 +5,4 @@ pyparsing==2.0.3
 python2-pythondialog==3.0.1
 configobj==5.0.6
 six==1.10.0
+mock==2.0.0
