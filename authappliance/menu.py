@@ -188,6 +188,20 @@ class Peer(object):
         self.position_local = ""
         self.position_remote = ""
 
+    def get_redundancy_status(self, role):
+        """
+        Given a role (one of "MASTER", "SLAVE"), run "SHOW <role> STATUS" locally
+        and return the result as a dictionary.
+        """
+        if role.upper() not in ('MASTER', 'SLAVE'):
+            raise RuntimeError('{} should be one of MASTER, SLAVE'.format(role.upper()))
+        result, err = self._execute_local_sql("SHOW {} STATUS".format(role))
+        lines = result.splitlines()
+        assert len(lines) == 2
+        keys = lines[0].strip().split('\t')
+        values = lines[1].strip().split('\t')
+        return dict(zip(keys, values))
+
     def get_peer_data(self):
         bt = "Add another SQL Master"
         code, ip = self.d.inputbox(
@@ -571,13 +585,29 @@ class DBMenu(object):
 
     def redundancy_status(self):
         r, bind, server_id = self.db.is_redundant()
-        self.d.scrollbox(
-            u"""
-            Master-Master replication active: {active!s}
-            Server ID: {server_id!s}
-            Bind Address: {bind_address!s}
-            """.format(active=r, bind_address=bind, server_id=server_id),
-            width=60, height=20)
+        info = [
+            u"Master-Master replication active: {active!s}\n"
+            u"Server ID: {server_id!s}\n"
+            u"Bind Address: {bind_address!s}\n".format(active=r, bind_address=bind, server_id=server_id)]
+        if r:
+            master_status = self.peer.get_redundancy_status("MASTER")
+            slave_status = self.peer.get_redundancy_status("SLAVE")
+            info.append(
+                u"Master\n"
+                u"------\n"
+                u"File: {master[File]}\n"
+                u"Position: {master[Position]}\n"
+                u"\n"
+                u"Slave\n"
+                u"-----\n"
+                u"SQL Running State: {slave[Slave_SQL_Running_State]}\n"
+                u"Last SQL Error Timestamp: {slave[Last_SQL_Error_Timestamp]}\n"
+                u"Last SQL Error: {slave[Last_SQL_Error]}\n"
+                u"\n"
+                u"IO State: {slave[Slave_IO_State]}\n"
+                u"Last IO Error Timestamp: {slave[Last_IO_Error_Timestamp]}\n"
+                u"Last IO Error: {slave[Last_IO_Error]}".format(master=master_status, slave=slave_status))
+        self.d.scrollbox("\n".join(info), width=60, height=20)
 
     def db_init(self):
         db_connect = self.pConfig.get_DB()
