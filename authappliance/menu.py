@@ -592,22 +592,22 @@ class DBMenu(object):
         if r:
             master_status = self.peer.get_redundancy_status("MASTER")
             slave_status = self.peer.get_redundancy_status("SLAVE")
+            slave_sql_error = slave_status['Last_SQL_Error'] or '(none)'
+            slave_io_error = slave_status['Last_IO_Error'] or '(none)'
             info.append(
                 u"Master\n"
                 u"------\n"
-                u"File: {master[File]}\n"
-                u"Position: {master[Position]}\n"
+                u"File: {master_file}\n"
+                u"Position: {master_position}\n"
                 u"\n"
                 u"Slave\n"
                 u"-----\n"
-                u"SQL Running State: {slave[Slave_SQL_Running_State]}\n"
-                u"Last SQL Error Timestamp: {slave[Last_SQL_Error_Timestamp]}\n"
-                u"Last SQL Error: {slave[Last_SQL_Error]}\n"
-                u"\n"
-                u"IO State: {slave[Slave_IO_State]}\n"
-                u"Last IO Error Timestamp: {slave[Last_IO_Error_Timestamp]}\n"
-                u"Last IO Error: {slave[Last_IO_Error]}".format(master=master_status, slave=slave_status))
-        self.d.scrollbox("\n".join(info), width=60, height=20)
+                u"Last SQL Error: {slave_sql_error}\n"
+                u"Last IO Error: {slave_io_error}".format(master_file=master_status['File'],
+                                                          master_position=master_status['Position'],
+                                                          slave_sql_error=slave_sql_error,
+                                                          slave_io_error=slave_io_error))
+        self.d.msgbox("\n".join(info), width=60, height=20)
 
     def db_init(self):
         db_connect = self.pConfig.get_DB()
