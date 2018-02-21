@@ -13,3 +13,6 @@
 [submodule "authappliance/lib/--force"]
 	path = authappliance/lib/--force
 	url = https://github.com/privacyidea/mysqlparser.git
+[submodule "authappliance/lib/tincparser"]
+	path = authappliance/lib/tincparser
+	url = git://github.com/privacyidea/tincparser
