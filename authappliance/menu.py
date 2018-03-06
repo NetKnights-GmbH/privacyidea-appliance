@@ -24,6 +24,7 @@ import sys
 import time
 from functools import partial
 
+import pipes
 from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          ApacheConfig,
@@ -46,6 +47,7 @@ from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
+from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -300,6 +302,80 @@ class Peer(object):
             self.add_info(err)
         output = stdout.read()
         return output, err
+
+    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_name='abcvpn'):
+        """
+        Set up a tinc tunnel between self.local_ip and self.remote_ip.
+        """
+        # create SFTP client to remote server
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(AutoAddPolicy())
+        ssh.connect(str(self.remote_ip), username="root", password=self.password)
+        sftp = ssh.open_sftp()
+        local_io_handler = LocalIOHandler()
+        remote_io_handler = SFTPIOHandler(sftp)
+        # create directories locally and remotely
+        for io_handler in (local_io_handler, remote_io_handler):
+            io_handler.makedirs('/etc/tinc/{}/hosts'.format(vpn_name))
+        tinc_conf = '/etc/tinc/{}/tinc.conf'.format(vpn_name)
+        # Local tinc.conf
+        local_tinc_conf = TincConfFile(local_io_handler, tinc_conf)
+        local_tinc_conf.update({
+            'Name': 'pinode1',
+            'Device': '/dev/net/tun',
+            'AddressFamily': 'ipv4'
+        })
+        local_tinc_conf.save()
+
+        # Remote tinc.conf
+        remote_tinc_conf = TincConfFile(remote_io_handler, tinc_conf)
+        remote_tinc_conf.update({
+            'Name': 'pinode2',
+            'Device': '/dev/net/tun',
+            'AddressFamily': 'ipv4',
+            'ConnectTo': 'pinode1'
+        })
+        remote_tinc_conf.save()
+
+        # this command generates /etc/tinc/[vpn_name]/rsa_key.priv and /etc/tinc/[vpn_name]/hosts/[hostname]
+        generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
+
+        # Generate local keypair
+        proc = Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate('\n\n') # press <RETURN> two times -- TODO: correct way to do that?
+        if proc.returncode != 0:
+            self.add_info("ERROR: Could not generate local keypair")
+            self.add_info(stderr)
+        # Generate remote keypair
+        stdin, stdout, stderr = ssh.exec_command(generate_key_command)
+        if stderr:
+            self.add_info(stderr.read())
+
+        # Locally configure the pinode1 host file (which already contains the pubkey)
+        pinode1_filename = '/etc/tinc/{}/hosts/pinode1'.format(vpn_name)
+        pinode2_filename = '/etc/tinc/{}/hosts/pinode2'.format(vpn_name)
+        local_pinode1_conf = TincConfFile(local_io_handler, pinode1_filename)
+        local_pinode1_conf.update({
+            'Address': str(self.local_ip),
+            'Subnet': local_vpn_ip,
+        })
+        local_pinode1_conf.save()
+        # Remote configure the pinode2 host file (which already contains the pubkey)
+        remote_pinode2_conf = TincConfFile(remote_io_handler, pinode2_filename)
+        remote_pinode2_conf.update({
+            'Address': str(self.remote_ip),
+            'Subnet': remote_vpn_ip,
+        })
+        remote_pinode2_conf.save()
+
+        # Exchange host files (and thus RSA pubkeys)
+        # pinode1 -> REMOTE
+        sftp.put(pinode1_filename, pinode1_filename)
+        sftp.get(pinode2_filename, pinode2_filename)
+
+        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
+
+        ssh.close()
 
     def setup_redundancy(self):
         #
@@ -571,6 +647,16 @@ class DBMenu(object):
             if code != self.d.DIALOG_OK:
                 return
             else:
+                code = self.d.yesno(
+                    "By default, communication between the MySQL peers is "
+                    "unencrypted. Optionally, the appliance tool can set up "
+                    "an encrypted tinc VPN tunnel between the two peers. "
+                    "Should we set up encrypted master-master replication?",
+                    width=60)
+                if code == self.d.DIALOG_OK:
+                    # TODO: Let user choose the subnet
+                    self.peer.setup_tinc('172.20.1.1', '172.20.1.2')
+
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
