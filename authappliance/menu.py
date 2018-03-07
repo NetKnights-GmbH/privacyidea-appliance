@@ -47,7 +47,7 @@ from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
-from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler
+from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler, UpScript, NetsBoot
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -303,7 +303,7 @@ class Peer(object):
         output = stdout.read()
         return output, err
 
-    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_name='abcvpn'):
+    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='abcvpn'):
         """
         Set up a tinc tunnel between self.local_ip and self.remote_ip.
         """
@@ -372,6 +372,61 @@ class Peer(object):
         # pinode1 -> REMOTE
         sftp.put(pinode1_filename, pinode1_filename)
         sftp.get(pinode2_filename, pinode2_filename)
+
+        # Create tinc-up scripts
+        tinc_up_filename = '/etc/tinc/{}/tinc-up'.format(vpn_name)
+        tinc_up_config = '\n'.join([
+            'ip link set $INTERFACE up',
+            'ip addr add {ip} dev $INTERFACE',
+            'ip route add {network} dev $INTERFACE'])
+
+        # locally
+        local_tinc_up = UpScript(local_io_handler, tinc_up_filename)
+        local_tinc_up.appliance_section = tinc_up_config.format(
+            ip=local_vpn_ip,
+            network=vpn_subnet,
+        ).split('\n')
+        local_tinc_up.save()
+        local_io_handler.chmod(tinc_up_filename, 0o755)
+
+        # remotely
+        remote_tinc_up = UpScript(remote_io_handler, tinc_up_filename)
+        remote_tinc_up.appliance_section = tinc_up_config.format(
+            ip=remote_vpn_ip,
+            network=vpn_subnet,
+        ).split('\n')
+        remote_tinc_up.save()
+        remote_io_handler.chmod(tinc_up_filename, 0o755)
+
+        # add network to nets.boot
+        nets_boot_filename = '/etc/tinc/nets.boot'
+        # locally
+        local_nets_boot = NetsBoot(local_io_handler, nets_boot_filename)
+        local_nets_boot.add(vpn_name)
+        local_nets_boot.save()
+
+        # remotely
+        remote_nets_boot = NetsBoot(remote_io_handler, nets_boot_filename)
+        remote_nets_boot.add(vpn_name)
+        remote_nets_boot.save()
+
+        # Start the tinc nets
+        start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
+        # locally
+        proc = Popen(start_command, shell=True)
+        if proc.wait() != 0:
+            self.add_info('Could not bring up the tinc VPN locally!')
+        # remotely
+        stdin, stdout, stderr = ssh.exec_command(generate_key_command)
+        if stderr:
+            self.add_info(stderr.read())
+
+        # and we are done.
+        # we now set local_ip and remote_ip to the VPN IP addresses!
+        self.local_ip = local_vpn_ip
+        self.remote_ip = remote_vpn_ip
+
+        self.add_info('The tinc VPN was set up successfully!')
 
         self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
 
@@ -655,7 +710,7 @@ class DBMenu(object):
                     width=60)
                 if code == self.d.DIALOG_OK:
                     # TODO: Let user choose the subnet
-                    self.peer.setup_tinc('172.20.1.1', '172.20.1.2')
+                    self.peer.setup_tinc('172.20.1.1', '172.20.1.2', '172.20.1.0/30')
 
                 self.peer.setup_redundancy()
 
