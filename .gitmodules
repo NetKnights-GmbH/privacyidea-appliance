@@ -15,4 +15,4 @@
 	url = https://github.com/privacyidea/mysqlparser.git
 [submodule "authappliance/lib/tincparser"]
 	path = authappliance/lib/tincparser
-	url = git://github.com/privacyidea/tincparser
+	url = https://github.com/privacyidea/tincparser.git
