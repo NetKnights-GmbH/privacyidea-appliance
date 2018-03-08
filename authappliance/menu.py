@@ -303,9 +303,10 @@ class Peer(object):
         output = stdout.read()
         return output, err
 
-    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='abcvpn'):
+    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
         """
-        Set up a tinc tunnel between self.local_ip and self.remote_ip.
+        Set up a tinc tunnel between self.local_ip and self.remote_ip
+        and update self.local_ip and self.remote_ip accordingly.
         """
         # create SFTP client to remote server
         ssh = SSHClient()
@@ -314,10 +315,12 @@ class Peer(object):
         sftp = ssh.open_sftp()
         local_io_handler = LocalIOHandler()
         remote_io_handler = SFTPIOHandler(sftp)
+
+        tinc_net_directory = '/etc/tinc/{}/'.format(vpn_name)
         # create directories locally and remotely
         for io_handler in (local_io_handler, remote_io_handler):
-            io_handler.makedirs('/etc/tinc/{}/hosts'.format(vpn_name))
-        tinc_conf = '/etc/tinc/{}/tinc.conf'.format(vpn_name)
+            io_handler.makedirs(os.path.join(tinc_net_directory, 'hosts'))
+        tinc_conf = os.path.join(tinc_net_directory, 'tinc.conf')
         # Local tinc.conf
         local_tinc_conf = TincConfFile(local_io_handler, tinc_conf)
         local_tinc_conf.update({
@@ -342,7 +345,7 @@ class Peer(object):
 
         # Generate local keypair
         proc = Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = proc.communicate('\n\n') # press <RETURN> two times -- TODO: correct way to do that?
+        stdout, stderr = proc.communicate('\n\n') # press <RETURN> two times
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
             self.add_info(stderr)
@@ -352,8 +355,8 @@ class Peer(object):
             self.add_info(stderr.read())
 
         # Locally configure the pinode1 host file (which already contains the pubkey)
-        pinode1_filename = '/etc/tinc/{}/hosts/pinode1'.format(vpn_name)
-        pinode2_filename = '/etc/tinc/{}/hosts/pinode2'.format(vpn_name)
+        pinode1_filename = os.path.join(tinc_net_directory, 'hosts', 'pinode1')
+        pinode2_filename = os.path.join(tinc_net_directory, 'hosts', 'pinode2')
         local_pinode1_conf = TincConfFile(local_io_handler, pinode1_filename)
         local_pinode1_conf.update({
             'Address': str(self.local_ip),
@@ -371,10 +374,11 @@ class Peer(object):
         # Exchange host files (and thus RSA pubkeys)
         # pinode1 -> REMOTE
         sftp.put(pinode1_filename, pinode1_filename)
+        # REMOTE -> pinode2
         sftp.get(pinode2_filename, pinode2_filename)
 
         # Create tinc-up scripts
-        tinc_up_filename = '/etc/tinc/{}/tinc-up'.format(vpn_name)
+        tinc_up_filename = os.path.join(tinc_net_directory, 'tinc-up')
         tinc_up_config = '\n'.join([
             'ip link set $INTERFACE up',
             'ip addr add {ip} dev $INTERFACE',
@@ -417,7 +421,8 @@ class Peer(object):
         if proc.wait() != 0:
             self.add_info('Could not bring up the tinc VPN locally!')
         # remotely
-        stdin, stdout, stderr = ssh.exec_command(generate_key_command)
+        stdin, stdout, stderr = ssh.exec_command(start_command)
+        stdout.channel.recv_exit_status()
         if stderr:
             self.add_info(stderr.read())
 
