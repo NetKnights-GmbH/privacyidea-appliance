@@ -426,6 +426,22 @@ class Peer(object):
         if stderr:
             self.add_info(stderr.read())
 
+        # Wait a second for tincd to start
+        time.sleep(1)
+
+        # Try to ping LOCAL -> REMOTE
+        ping_command = 'ping -c 1 {}'
+        proc = Popen(ping_command.format(remote_vpn_ip), shell=True)
+        if proc.wait() != 0:
+            self.add_info('Could not ping remote host')
+            return False
+
+        # Try to ping REMOTE -> LOCAL
+        stdin, stdout, stderr = ssh.exec_command(ping_command.format(local_vpn_ip + '1'))
+        if stdout.channel.recv_exit_status() != 0:
+            self.add_info('Could not ping local host from remote host')
+            return False
+
         # and we are done.
         # we now set local_ip and remote_ip to the VPN IP addresses!
         self.local_ip = local_vpn_ip
@@ -433,9 +449,11 @@ class Peer(object):
 
         self.add_info('The tinc VPN was set up successfully!')
 
-        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
-
         ssh.close()
+        return True
+
+    def display_messages(self):
+        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
 
     def setup_redundancy(self):
         #
@@ -631,7 +649,7 @@ class Peer(object):
         self.ssh.exec_command("service apache2 start")
         self.add_info("\nRedundant setup complete.")
 
-        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
+        self.display_messages()
 
 
 class DBMenu(object):
@@ -715,7 +733,11 @@ class DBMenu(object):
                     width=60)
                 if code == self.d.DIALOG_OK:
                     # TODO: Let user choose the subnet
-                    self.peer.setup_tinc('172.20.1.1', '172.20.1.2', '172.20.1.0/30')
+                    tinc_ready = self.peer.setup_tinc('172.20.1.1', '172.20.1.2', '172.20.1.0/30')
+                    self.peer.display_messages()
+                    if not tinc_ready:
+                        self.d.msgbox("The tinc VPN could not be set up. Thus, we abort the redundancy setup.")
+                        return
 
                 self.peer.setup_redundancy()
 
