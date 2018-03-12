@@ -1,3 +1,9 @@
+pi-appliance (2.1~dev1) xenial; urgency=low
+
+  * Add removal of old backup files
+
+ -- Cornelius Kölbel <cornelius.koelbel@netknights.it>  Mon, 12 Mar 2018 19:00:00 +0200
+
 pi-appliance (2.0) xenial; urgency=low
 
   * change to xenial
