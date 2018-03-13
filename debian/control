@@ -8,7 +8,7 @@ Standards-Version: 3.9.5
 
 Package: pi-appliance
 Architecture: all
-Depends: ${misc:Depends}, privacyidea-apache2, privacyidea-radius, python-dialog, python-paramiko, python-configobj, python-dbus
+Depends: ${misc:Depends}, privacyidea-apache2, privacyidea-radius, python-dialog, python-paramiko, python-configobj, python-dbus, aptitude
 Description: two-factor authentication system. This is a setup tool for easy system setup.
  privacyIDEA: identity, multifactor authentication, authorization.
  privacyIDEA is an open solution for strong two-factor authentication.

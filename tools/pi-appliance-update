@@ -1,0 +1,70 @@
+#!/bin/bash
+
+UPDATE_TYPE="security"
+BOOT=0
+CLEAN="false"
+HELP=0
+
+while getopts "t:bch" option; do 
+ case "${option}" 
+ in 
+ t) UPDATE_TYPE=${OPTARG};; 
+ b) BOOT=1;; 
+ c) CLEAN="true";;
+ h) HELP=1;;
+ esac 
+done 
+
+if [ $HELP -eq 1 ]; then
+   echo "Usage: $0 [-b] [-c] [-t type]"
+   echo ""
+   echo " -b        : boot after update if necessary."
+   echo " -c        : clean unused packages after update."
+   echo " -t <type> : Either update 'security' packages or 'updates'."
+   exit 0
+fi
+
+LOGFILE=/var/log/privacyidea/update-${UPDATE_TYPE}.log
+
+function log {
+	echo $1 >> $LOGFILE
+}
+
+function do_update_security {
+	log "### Downloading packages."
+	aptitude update >> $LOGFILE
+	log "### Starting update."
+	aptitude safe-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-security >> $LOGFILE
+}
+
+function do_update_updates {
+	log "### Downloading packages."
+	aptitude update >> $LOGFILE
+	log "### Starting update."
+	aptitude full-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-updates >> $LOGFILE
+}
+
+
+date > $LOGFILE
+log "### Running ${UPDATE_TYPE} update."
+
+case "${UPDATE_TYPE}" 
+   in
+   "security")
+	do_update_security
+	;;
+   "updates")
+	do_update_updates
+	;;
+   *) echo "Unknown update type. Choose 'security' or 'updates'."
+	exit 1
+	;;
+esac
+
+if [ $BOOT -eq 1 ]; then
+	# check for /var/run/reboot-required.pkgs 
+	if [ -e /var/run/reboot-required.pkgs ]; then
+		log "Rebooting after update."
+		/sbin/shutdown -r
+	fi
+fi
