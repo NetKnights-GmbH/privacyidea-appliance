@@ -439,7 +439,8 @@ class Peer(object):
         time.sleep(3)
 
         # Try to ping LOCAL -> REMOTE
-        ping_command = 'ping -c 1 {}'
+        # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
+        ping_command = 'ping -c 10 {}'
         proc = Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
