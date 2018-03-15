@@ -48,6 +48,7 @@ from tempfile import NamedTemporaryFile
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
 from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler, UpScript, NetsBoot
+from authappliance.lib.utils import execute_ssh_command_and_wait
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -349,10 +350,14 @@ class Peer(object):
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
             self.add_info(stderr)
+            return False
+
         # Generate remote keypair
-        stdin, stdout, stderr = ssh.exec_command(generate_key_command)
-        if stderr:
-            self.add_info(stderr.read())
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, generate_key_command)
+        if returncode != 0:
+            self.add_info("ERROR: Could not generate remote keypair")
+            self.add_info(stderr)
+            return False
 
         # Locally configure the pinode1 host file (which already contains the pubkey)
         pinode1_filename = os.path.join(tinc_net_directory, 'hosts', 'pinode1')
@@ -417,29 +422,36 @@ class Peer(object):
         # Start the tinc nets
         start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
         # locally
-        proc = Popen(start_command, shell=True)
+        proc = Popen(start_command, shell=True, stderr=PIPE)
+        stdout, stderr = proc.communicate()
         if proc.wait() != 0:
-            self.add_info('Could not bring up the tinc VPN locally!')
+            self.add_info('ERROR: Could not bring up the tinc VPN locally')
+            self.add_info(stderr)
+            return False
         # remotely
-        stdin, stdout, stderr = ssh.exec_command(start_command)
-        stdout.channel.recv_exit_status()
-        if stderr:
-            self.add_info(stderr.read())
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, start_command)
+        if returncode != 0:
+            self.add_info('ERROR: Could not bring up the tinc VPN remotely')
+            self.add_info(stderr)
+            return False
 
-        # Wait a second for tincd to start
-        time.sleep(1)
+        # Wait a few seconds for tincd to start
+        time.sleep(3)
 
         # Try to ping LOCAL -> REMOTE
         ping_command = 'ping -c 1 {}'
-        proc = Popen(ping_command.format(remote_vpn_ip), shell=True)
-        if proc.wait() != 0:
-            self.add_info('Could not ping remote host')
+        proc = Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            self.add_info('ERROR: Could not ping remote host from local host')
+            self.add_info(stdout)
             return False
 
         # Try to ping REMOTE -> LOCAL
-        stdin, stdout, stderr = ssh.exec_command(ping_command.format(local_vpn_ip + '1'))
-        if stdout.channel.recv_exit_status() != 0:
-            self.add_info('Could not ping local host from remote host')
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, ping_command.format(local_vpn_ip))
+        if returncode != 0:
+            self.add_info('ERROR: Could not ping local host from remote host')
+            self.add_info(stdout)
             return False
 
         # and we are done.
