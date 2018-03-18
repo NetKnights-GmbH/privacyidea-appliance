@@ -964,7 +964,8 @@ class BackupMenu(object):
         self.Backup.CP.read()
         choices = [(self.config, "Configure backup", ""),
                    (self.now, "Backup now", ""),
-                   (self.view, "View Backups", "")]
+                   (self.view, "View Backups", ""),
+                   (self.cleanup, "Set backup rotation", "")]
         while 1:
             menu = self.d.value_menu("Backup and Restore",
                                      choices=choices,
@@ -1017,6 +1018,23 @@ class BackupMenu(object):
             else:
                 break
         pass
+
+    def cleanup(self):
+        """
+        Ask for a number of days and set these backup rotation
+        :return:
+        """
+        bt = "Set the number of days, backups should be saved"
+        code, bdays = self.d.inputbox("Enter number of days, for long we should keep the backups.",
+                                      width=70,
+                                      backtitle=bt)
+        if code == self.d.DIALOG_OK:
+            try:
+                days = int(bdays)
+            except ValueError:
+                days = 90
+            self.Backup.backup_clean(days)
+
 
     def add(self):
         '''
