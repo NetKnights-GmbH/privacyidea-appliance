@@ -37,7 +37,7 @@ from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
 from privacyidea.models import Admin
 from privacyidea.app import create_app
-from netaddr import IPAddress
+from netaddr import IPAddress, IPNetwork, AddrFormatError
 from paramiko.client import SSHClient
 from paramiko import SSHException, AutoAddPolicy, SFTPClient, Transport
 from subprocess import Popen, PIPE
@@ -746,10 +746,27 @@ class DBMenu(object):
                     width=60)
                 if code == self.d.DIALOG_OK:
                     # TODO: Let user choose the subnet
-                    tinc_ready = self.peer.setup_tinc('172.20.1.1', '172.20.1.2', '172.20.1.0/30')
-                    self.peer.display_messages()
-                    if not tinc_ready:
-                        self.d.msgbox("The tinc VPN could not be set up. Thus, we abort the redundancy setup.")
+                    code, subnet_string = self.d.inputbox("Please choose a subnet for the VPN which is "
+                                                          "not yet used, using CIDR notation.",
+                                                          init="172.20.1.0/30")
+                    if code == self.d.DIALOG_OK:
+                        try:
+                            subnet = IPNetwork(subnet_string)
+                        except AddrFormatError:
+                            self.d.msgbox("You have to specify a subnet in CIDR notation.")
+                            return
+                        if subnet.prefixlen > 30:
+                            self.d.msgbox("You have specify at least a /30 subnet.")
+                            return
+                        hosts = list(subnet.iter_hosts())
+                        tinc_ready = self.peer.setup_tinc(str(hosts[0]),
+                                                          str(hosts[1]),
+                                                          str(subnet))
+                        self.peer.display_messages()
+                        if not tinc_ready:
+                            self.d.msgbox("The tinc VPN could not be set up. Thus, we abort the redundancy setup.")
+                            return
+                    else:
                         return
 
                 self.peer.setup_redundancy()
