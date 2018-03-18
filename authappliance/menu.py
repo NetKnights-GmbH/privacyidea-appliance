@@ -745,7 +745,6 @@ class DBMenu(object):
                     "Should we set up encrypted master-master replication?",
                     width=60)
                 if code == self.d.DIALOG_OK:
-                    # TODO: Let user choose the subnet
                     code, subnet_string = self.d.inputbox("Please choose a subnet for the VPN which is "
                                                           "not yet used, using CIDR notation.",
                                                           init="172.20.1.0/30")
