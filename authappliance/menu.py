@@ -48,6 +48,7 @@ from tempfile import NamedTemporaryFile
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
 from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler, UpScript, NetsBoot
+from authappliance.lib.updates import Updates, UPDATE_UPDATES, UPDATE_SECURITY
 from authappliance.lib.utils import execute_ssh_command_and_wait
 
 DESCRIPTION = __doc__
@@ -967,6 +968,77 @@ class AuditMenu(object):
             # Delete backup job.
             self.Audit.del_rotate(None, hour, minute, month, dom, dow)
 
+class UpdatesMenu(object):
+    def __init__(self, app, dialog):
+        self.app = app
+        self.d = dialog
+        self.updates = Updates()
+
+    def menu(self):
+        while True:
+            self.updates.read()
+            choices = [(self.add_update, "Add new update cronjob", "")]
+            for cronjob, options in self.updates.get_update_cronjobs():
+                choices.append((partial(self.delete_update, cronjob),
+                                "Update '%s' packages at %s %s %s %s %s" % (
+                                    options['-t'],
+                                    cronjob.minute,
+                                    cronjob.hour,
+                                    cronjob.dom,
+                                    cronjob.month,
+                                    cronjob.dow),
+                                ""))
+            menu = self.d.value_menu("Updates",
+                                     choices=choices,
+                                     cancel='Back',
+                                     backtitle='Automatic Updates Configuration')
+            if menu is not None:
+                menu()
+            else:
+                break
+
+    def add_update(self):
+        bt = "Add an automatic update job"
+        code, update_date = self.d.inputbox("The date to run the update. "
+                                      "Please enter it like this:\n"
+                                      "<Minute>  <Hour>  <Day-of-Month> "
+                                      " <Month>  <Day-of-Week>\n"
+                                      "You may use '*' as wildcard entry.",
+                                      width=70,
+                                      backtitle=bt)
+
+        if code != self.d.DIALOG_OK:
+            return
+
+        date_fragments = update_date.split()
+        if len(date_fragments) > 5:
+            return
+        # Extend with '*' until we have 5 elements
+        date_fragments.extend(['*'] * (5 - len(date_fragments)))
+        assert len(date_fragments) == 5
+
+        update_type = self.d.value_radiolist("Please specify which updates should be installed.",
+                                             choices=[
+                                                 (UPDATE_SECURITY, "security", "Install security updates only"),
+                                                 (UPDATE_UPDATES, "updates", "Install general updates")
+                                             ],
+                                             current=UPDATE_SECURITY,
+                                             backtitle=bt)
+        if update_type is None:
+            return
+
+        code = self.d.yesno("Should the system be rebooted after updates have been installed?",
+                            backtitle=bt)
+        boot = (code == self.d.DIALOG_OK)
+
+        self.updates.add_update_cronjob(date_fragments, update_type, boot)
+
+    def delete_update(self, cronjob):
+        code = self.d.yesno("Do you want to delete the following automatic update job?\n"
+                            "{}\nat {}".format(cronjob.command, "TODO"),
+                            width=70)
+        if code == self.d.DIALOG_OK:
+            self.updates.delete_cronjob(cronjob)
 
 class BackupMenu(object):
 
@@ -1685,6 +1757,7 @@ class MainMenu(object):
         self.d = ExtDialog(dialog="dialog")
         self.radiusDialog = RadiusMenu(self.app, self.d)
         self.backupDialog = BackupMenu(self.app, self.d)
+        self.updatesDialog = UpdatesMenu(self.app, self.d)
         self.dbDialog = DBMenu(self.app, self.d, self.pConfig)
         self.webserverDialog = WebserverMenu(self.app, self.d)
         self.auditDialog = AuditMenu(self.app, self.d)
@@ -1719,6 +1792,9 @@ class MainMenu(object):
                         "Backup and Restore", "",
                         "Backup or Restore of privacyIDEA "
                         "configuration and database."))
+        choices.append((self.updatesDialog.menu,
+                        "Automatic Updates", "",
+                        "Define times when the system should be updated automatically."))
         choices.append((self.auditDialog.menu,
                         "Audit Rotation", "",
                         "Define times when to check if the Audit log should "
