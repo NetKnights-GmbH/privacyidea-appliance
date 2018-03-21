@@ -31,7 +31,8 @@ setup(
     url='http://www.privacyidea.org',
     install_requires=["python2-pythondialog"
                       ],
-    scripts=['authappliance/pi-appliance'],
+    scripts=['authappliance/pi-appliance',
+             'tools/pi-appliance-update'],
     packages=find_packages(),
     keyword="OTP Appliance",
     include_package_data=True,
