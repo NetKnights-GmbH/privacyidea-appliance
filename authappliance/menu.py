@@ -294,15 +294,13 @@ class Peer(object):
 
     def _execute_remote_sql(self, sql):
         assert '"' not in sql
-        stdin, stdout, stderr = self.ssh.exec_command(
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh,
             'echo {} | mysql --defaults-extra-file=/etc/mysql/debian.cnf'.format(
                 self._escape_for_shell(sql)))
-        err = stderr.read()
-        if err:
+        if stderr:
             self.add_info("====== ERROR =======")
-            self.add_info(err)
-        output = stdout.read()
-        return output, err
+            self.add_info(stderr)
+        return stdout, stderr
 
     def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
         """
@@ -529,9 +527,9 @@ class Peer(object):
         self.add_info("Restarting remote MySQL server...")
         self.ssh.connect(str(self.remote_ip), username="root",
                          password=self.password)
-        stdin, stdout, stderr = self.ssh.exec_command("service mysql restart")
-        if stderr:
-            self.add_info(stderr.read())
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh, "service mysql restart")
+        if ret != 0:
+            self.add_info(stderr)
         #
         # Configuring mysql
         #
@@ -539,9 +537,9 @@ class Peer(object):
         self.add_info("Stopping local webserver")
         self.os.restart(service="apache2", action="stop")
         self.add_info("Stopping remote webserver")
-        stdin, stdout, stderr = self.ssh.exec_command("service apache2 stop")
-        if stderr:
-            self.add_info(stderr.read())
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh, "service apache2 stop")
+        if ret != 0:
+            self.add_info(stderr)
 
         self.add_info("Configuring MySQL on local server...")
         # We start at 40, since 39 is "'" which might lead to confusion.
@@ -588,15 +586,14 @@ class Peer(object):
             os.unlink(dumpfile.name)
             # run the file remotely
             # mysql -u root -p < test.sql
-            stdin, stdout, stderr = self.ssh.exec_command(
+            ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh,
                 "cat {dumpfile} | mysql --defaults-extra-file=/etc/mysql/debian.cnf".format(dumpfile=dumpfile.name))
-            err = stderr.read()
-            if err:
-                self.add_info("ERROR: {0}".format(err))
+            if stderr:
+                self.add_info("ERROR: {0}".format(stderr))
             else:
                 self.add_info("Dumped SQL database on remote server")
             # delete remote file
-            self.ssh.exec_command(
+            execute_ssh_command_and_wait(self.ssh,
                 "rm -f {dumpfile}".format(dumpfile=dumpfile.name))
         else:
             self.add_info("ERROR: {0}".format(err))
@@ -659,7 +656,7 @@ class Peer(object):
         self.add_info("Starting local webserver")
         self.os.restart(service="apache2", action="start")
         self.add_info("Starting remote webserver")
-        self.ssh.exec_command("service apache2 start")
+        execute_ssh_command_and_wait(self.ssh, "service apache2 start")
         self.add_info("\nRedundant setup complete.")
 
         self.display_messages()
@@ -702,15 +699,10 @@ class DBMenu(object):
                 self.peer.ssh.connect(str(self.peer.remote_ip),
                                       username="root",
                                       password=self.peer.password)
-                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                ret, output_pi, error_pi = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l privacyidea-apache2')
-                output_pi = stdout.read()
-                error_pi = stderr.read()
-
-                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                ret, output_mysql, error_mysql = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l mysql-server')
-                output_mysql = stdout.read()
-                error_mysql = stderr.read()
                 self.peer.ssh.close()
                 if not output_mysql:
                     self.d.msgbox(

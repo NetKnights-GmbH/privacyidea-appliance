@@ -16,24 +16,39 @@
 # You should have received a copy of the GNU Affero General Public
 # License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import select
 
-def execute_ssh_command_and_wait(ssh, command, buffer_size=1024):
+
+def execute_ssh_command_and_wait(ssh, command, timeout=1.):
     """
     Execute ``command`` via SSH, wait for its termination and return a tuple
     ``(return code, stdout output as string, stderr output as string)``.
     :param ssh: SSHClient object
     :param command: command as string
+    :param timeout: maximum time to wait for data to be sent in seconds
     :return: 3-tuple
     """
     stdin_file, stdout_file, stderr_file = ssh.exec_command(command)
+    channel = stdout_file.channel
+    # not going to write to stdin
+    stdin_file.close()
+    channel.shutdown_write()
+
+    # adapted from https://github.com/paramiko/paramiko/issues/593#issuecomment-145377328
     stdout_data = []
     stderr_data = []
-    while True:
-        if stdout_file.channel.recv_ready():
-            stdout_data.append(stdout_file.channel.recv(buffer_size))
-        if stderr_file.channel.recv_ready():
-            stderr_data.append(stderr_file.channel.recv(buffer_size))
-        if stdout_file.channel.exit_status_ready():
+    while not channel.closed:
+        to_read, _, _ = select.select([channel], [], [], timeout)
+        if to_read:
+            if channel.recv_ready():
+                stdout_data.append(channel.recv(len(channel.in_buffer)))
+            if channel.recv_stderr_ready():
+                stderr_data.append(channel.recv(len(channel.in_buffer)))
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            channel.shutdown_read()
+            channel.close()
             break
+    stdout_file.close()
+    stderr_file.close()
     exit_status = stdout_file.channel.recv_exit_status()
     return exit_status, ''.join(stdout_data), ''.join(stderr_data)
