@@ -58,11 +58,17 @@ class Audit(object):
     def __init__(self):
         self.CP = CronJobParser()
 
+    def read(self):
+        ''' Shortcut for self.CP.read '''
+        self.CP.read()
+
     def get_cronjobs(self):
         '''
-        Parse the cronjob and return the backup times
+        Parse the crontab and return the audit rotation cronjobs
         '''
-        return self.CP.cronjobs
+        for cronjob in self.CP.cronjobs:
+            if cronjob.user == CRON_USER and cronjob.command.startswith(AUDIT_CMD):
+                yield cronjob
 
     def add_rotate(self, dc, params):
         """
@@ -88,34 +94,15 @@ class Audit(object):
             age = age or 180
             audit_cmd += " --age {0!s} ".format(age)
 
-        self.CP.cronjobs.append(CronJob(audit_cmd, dc[0], user=CRON_USER,
-                                        hour=dc[1], dom=dc[2], month=dc[3],
-                                        dow=dc[4]))
+        self.CP.cronjobs.append(CronJob.from_time(audit_cmd, CRON_USER, dc))
         self.CP.save(CRONTAB)
 
-
-    def del_rotate(self, type, hour, minute, month, dom, dow):
+    def del_rotate(self, cronjob):
         """        
-        :param type: 
-         
-        :return: 
+        Remove a cronjob instance from the crontab and save.
         """
-        jobs_num = len(self.CP.cronjobs)
-        i = jobs_num - 1
-        while i >= 0:
-            cronjob = self.CP.cronjobs[i]
-            if (cronjob.hour == hour and
-                        cronjob.minute == minute and
-                        cronjob.dom == dom and
-                        cronjob.month == month and
-                        cronjob.dow == dow and
-                        cronjob.user == CRON_USER and
-                    cronjob.command.startswith(AUDIT_CMD)):
-                self.CP.cronjobs.pop(i)
-            i -= 1
-
-        if len(self.CP.cronjobs) != jobs_num:
-            self.CP.save(CRONTAB)
+        self.CP.cronjobs.remove(cronjob)
+        self.CP.save(CRONTAB)
 
 
 class Backup(object):
@@ -125,6 +112,10 @@ class Backup(object):
                  data_dir="/var/lib/privacyidea/backup"):
         self.data_dir = data_dir
         self.CP = CronJobParser()
+
+    def read(self):
+        ''' Shortcut for self.CP.read '''
+        self.CP.read()
 
     def backup_now(self, password=None):
         '''
@@ -152,9 +143,11 @@ class Backup(object):
 
     def get_cronjobs(self):
         '''
-        Parse the cronjob and return the backup times
+        Parse the cronjobs and yield all backup cronjobs
         '''
-        return self.CP.cronjobs
+        for cronjob in self.CP.cronjobs:
+            if cronjob.user == CRON_USER and cronjob.command.startswith(BACKUP_CMD):
+                yield cronjob
     
     def add_backup_time(self, dc):
         '''
@@ -163,9 +156,7 @@ class Backup(object):
         :param dc: Date component of minute, hour, dom, month, dow
         :type dc: list
         '''
-        self.CP.cronjobs.append(CronJob(BACKUP_CMD, dc[0], user=CRON_USER,
-                                     hour=dc[1], dom=dc[2], month=dc[3],
-                                     dow=dc[4]))
+        self.CP.cronjobs.append(CronJob.from_time(BACKUP_CMD, CRON_USER, dc))
         self.CP.save(CRONTAB)
         # Check that privayidea can write the relevant files. Set correct permissions if possible.
         if os.geteuid() == 0:
@@ -180,14 +171,10 @@ class Backup(object):
         :param days: Backups older than these days get deleted.
         :return:
         """
-        jobs_num = len(self.CP.cronjobs)
-        i = jobs_num - 1
-        # Delete all find backup_dir cronjobs
-        while i >= 0:
-            cronjob = self.CP.cronjobs[i]
-            if cronjob.command.startswith("find {0!s}".format(BACKUP_DIR)):
-                self.CP.cronjobs.pop(i)
-            i -= 1
+        to_delete = [cronjob for cronjob in self.CP.cronjobs
+                     if cronjob.command.startswith("find {0!s}".format(BACKUP_DIR))]
+        for cronjob in to_delete:
+            self.CP.cronjobs.remove(cronjob)
         # Set the new cronjob to rotate the backup_dir
         bcmd = BACKUP_CLEAN_CMD.format(backup_dir=BACKUP_DIR, backup_days=days)
         self.CP.cronjobs.append(CronJob(bcmd, "0", hour="2"))
@@ -227,26 +214,12 @@ class Backup(object):
                               "time": mtime}
         return backups
     
-    def del_backup_time(self, hour, minute, month, dom, dow):
+    def del_backup(self, cronjob):
         '''
         Delete a backup time from the cronjob
         '''
-        jobs_num = len(self.CP.cronjobs)
-        i = jobs_num - 1
-        while i >= 0:
-            cronjob = self.CP.cronjobs[i]
-            if (cronjob.hour == hour and
-                cronjob.minute == minute and
-                cronjob.dom == dom and
-                cronjob.month == month and
-                cronjob.dow == dow and
-                cronjob.user == CRON_USER and
-                cronjob.command.startswith(BACKUP_CMD)):
-                self.CP.cronjobs.pop(i)
-            i -= 1
-            
-        if len(self.CP.cronjobs) != jobs_num:
-            self.CP.save(CRONTAB)
+        self.CP.cronjobs.remove(cronjob)
+        self.CP.save(CRONTAB)
 
 
 class PrivacyIDEAConfig(object):
