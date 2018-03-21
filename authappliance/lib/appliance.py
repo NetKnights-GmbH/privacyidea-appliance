@@ -41,6 +41,7 @@ RESTORE_CMD = "pi-manage backup restore %s"
 DEFAULT_CONFIG = "/etc/privacyidea/pi.cfg"
 BACKUP_DIR = "/var/lib/privacyidea/backup"
 BACKUP_CMD = "pi-manage backup create -d %s" % BACKUP_DIR
+BACKUP_CLEAN_CMD = "find {backup_dir} -atime +{backup_days} -delete"
 AUDIT_CMD = "pi-manage rotate_audit "
 
 SERVICE_APACHE = 'apache2'
@@ -170,6 +171,27 @@ class Backup(object):
         if os.geteuid() == 0:
             self._fix_cron_permissions(BACKUP_DIR)
             self._fix_cron_permissions('/etc/privacyidea/mysql.cnf')
+
+    def backup_clean(self, days=30):
+        """
+        Add a backup cleaning to the cronjobs
+        The backup clean job runs at night at 2 am.
+
+        :param days: Backups older than these days get deleted.
+        :return:
+        """
+        jobs_num = len(self.CP.cronjobs)
+        i = jobs_num - 1
+        # Delete all find backup_dir cronjobs
+        while i >= 0:
+            cronjob = self.CP.cronjobs[i]
+            if cronjob.command.startswith("find {0!s}".format(BACKUP_DIR)):
+                self.CP.cronjobs.pop(i)
+            i -= 1
+        # Set the new cronjob to rotate the backup_dir
+        bcmd = BACKUP_CLEAN_CMD.format(backup_dir=BACKUP_DIR, backup_days=days)
+        self.CP.cronjobs.append(CronJob(bcmd, "0", hour="2"))
+        self.CP.save(CRONTAB)
 
     def _fix_cron_permissions(self, filename):
         """

@@ -6,7 +6,7 @@ import funcsigs
 import mock
 import dialog
 
-PATCH_FUNCTIONS = ('yesno', 'menu', 'radiolist', 'inputbox')
+PATCH_FUNCTIONS = ('yesno', 'menu', 'radiolist', 'inputbox', 'passwordbox')
 #: Collect function signatures because we cannot do it once the mocks are activated.
 #: They are not going to change anyway.
 PATCH_FUNCTION_SIGNATURES = dict((function, funcsigs.signature(getattr(dialog.Dialog, function)))
@@ -177,6 +177,16 @@ class UserBehavior(object):
         """
         return_value = (dialog.Dialog.OK, answer) if answer is not None else (dialog.Dialog.CANCEL, '')
         return self.expect('inputbox').result(return_value)
+
+    def answer_passwordbox(self, answer):
+        """
+        Expect an "passwordbox" dialog and give an input accordingly.
+        :param answer: Text should be returned
+                       or None if the dialog should be canceled
+        :return: An ``ActionHandler``
+        """
+        return_value = (dialog.Dialog.OK, answer) if answer is not None else (dialog.Dialog.CANCEL, '')
+        return self.expect('passwordbox').result(return_value)
 
     def _side_effect_handler(self, function_name, *args, **kwargs):
         assert self._handlers, "Got call of {}, but ran out of handlers!".format(function_name)

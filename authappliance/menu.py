@@ -24,6 +24,7 @@ import sys
 import time
 from functools import partial
 
+import pipes
 from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          ApacheConfig,
@@ -46,6 +47,8 @@ from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
+from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler, UpScript, NetsBoot
+from authappliance.lib.utils import execute_ssh_command_and_wait
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -301,6 +304,170 @@ class Peer(object):
         output = stdout.read()
         return output, err
 
+    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
+        """
+        Set up a tinc tunnel between self.local_ip and self.remote_ip
+        and update self.local_ip and self.remote_ip accordingly.
+        """
+        # create SFTP client to remote server
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(AutoAddPolicy())
+        ssh.connect(str(self.remote_ip), username="root", password=self.password)
+        sftp = ssh.open_sftp()
+        local_io_handler = LocalIOHandler()
+        remote_io_handler = SFTPIOHandler(sftp)
+
+        tinc_net_directory = '/etc/tinc/{}/'.format(vpn_name)
+        # create directories locally and remotely
+        for io_handler in (local_io_handler, remote_io_handler):
+            io_handler.makedirs(os.path.join(tinc_net_directory, 'hosts'))
+        tinc_conf = os.path.join(tinc_net_directory, 'tinc.conf')
+        # Local tinc.conf
+        local_tinc_conf = TincConfFile(local_io_handler, tinc_conf)
+        local_tinc_conf.update({
+            'Name': 'pinode1',
+            'Device': '/dev/net/tun',
+            'AddressFamily': 'ipv4'
+        })
+        local_tinc_conf.save()
+
+        # Remote tinc.conf
+        remote_tinc_conf = TincConfFile(remote_io_handler, tinc_conf)
+        remote_tinc_conf.update({
+            'Name': 'pinode2',
+            'Device': '/dev/net/tun',
+            'AddressFamily': 'ipv4',
+            'ConnectTo': 'pinode1'
+        })
+        remote_tinc_conf.save()
+
+        # this command generates /etc/tinc/[vpn_name]/rsa_key.priv and /etc/tinc/[vpn_name]/hosts/[hostname]
+        generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
+
+        # Generate local keypair
+        proc = Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = proc.communicate('\n\n') # press <RETURN> two times
+        if proc.returncode != 0:
+            self.add_info("ERROR: Could not generate local keypair")
+            self.add_info(stderr)
+            return False
+
+        # Generate remote keypair
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, generate_key_command)
+        if returncode != 0:
+            self.add_info("ERROR: Could not generate remote keypair")
+            self.add_info(stderr)
+            return False
+
+        # Locally configure the pinode1 host file (which already contains the pubkey)
+        pinode1_filename = os.path.join(tinc_net_directory, 'hosts', 'pinode1')
+        pinode2_filename = os.path.join(tinc_net_directory, 'hosts', 'pinode2')
+        local_pinode1_conf = TincConfFile(local_io_handler, pinode1_filename)
+        local_pinode1_conf.update({
+            'Address': str(self.local_ip),
+            'Subnet': local_vpn_ip,
+        })
+        local_pinode1_conf.save()
+        # Remote configure the pinode2 host file (which already contains the pubkey)
+        remote_pinode2_conf = TincConfFile(remote_io_handler, pinode2_filename)
+        remote_pinode2_conf.update({
+            'Address': str(self.remote_ip),
+            'Subnet': remote_vpn_ip,
+        })
+        remote_pinode2_conf.save()
+
+        # Exchange host files (and thus RSA pubkeys)
+        # pinode1 -> REMOTE
+        sftp.put(pinode1_filename, pinode1_filename)
+        # REMOTE -> pinode2
+        sftp.get(pinode2_filename, pinode2_filename)
+
+        # Create tinc-up scripts
+        tinc_up_filename = os.path.join(tinc_net_directory, 'tinc-up')
+        tinc_up_config = '\n'.join([
+            'ip link set $INTERFACE up',
+            'ip addr add {ip} dev $INTERFACE',
+            'ip route add {network} dev $INTERFACE'])
+
+        # locally
+        local_tinc_up = UpScript(local_io_handler, tinc_up_filename)
+        local_tinc_up.appliance_section = tinc_up_config.format(
+            ip=local_vpn_ip,
+            network=vpn_subnet,
+        ).split('\n')
+        local_tinc_up.save()
+        local_io_handler.chmod(tinc_up_filename, 0o755)
+
+        # remotely
+        remote_tinc_up = UpScript(remote_io_handler, tinc_up_filename)
+        remote_tinc_up.appliance_section = tinc_up_config.format(
+            ip=remote_vpn_ip,
+            network=vpn_subnet,
+        ).split('\n')
+        remote_tinc_up.save()
+        remote_io_handler.chmod(tinc_up_filename, 0o755)
+
+        # add network to nets.boot
+        nets_boot_filename = '/etc/tinc/nets.boot'
+        # locally
+        local_nets_boot = NetsBoot(local_io_handler, nets_boot_filename)
+        local_nets_boot.add(vpn_name)
+        local_nets_boot.save()
+
+        # remotely
+        remote_nets_boot = NetsBoot(remote_io_handler, nets_boot_filename)
+        remote_nets_boot.add(vpn_name)
+        remote_nets_boot.save()
+
+        # Start the tinc nets
+        start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
+        # locally
+        proc = Popen(start_command, shell=True, stderr=PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.wait() != 0:
+            self.add_info('ERROR: Could not bring up the tinc VPN locally')
+            self.add_info(stderr)
+            return False
+        # remotely
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, start_command)
+        if returncode != 0:
+            self.add_info('ERROR: Could not bring up the tinc VPN remotely')
+            self.add_info(stderr)
+            return False
+
+        # Wait a few seconds for tincd to start
+        time.sleep(3)
+
+        # Try to ping LOCAL -> REMOTE
+        # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
+        ping_command = 'ping -c 10 {}'
+        proc = Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            self.add_info('ERROR: Could not ping remote host from local host')
+            self.add_info(stdout)
+            return False
+
+        # Try to ping REMOTE -> LOCAL
+        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, ping_command.format(local_vpn_ip))
+        if returncode != 0:
+            self.add_info('ERROR: Could not ping local host from remote host')
+            self.add_info(stdout)
+            return False
+
+        # and we are done.
+        # we now set local_ip and remote_ip to the VPN IP addresses!
+        self.local_ip = local_vpn_ip
+        self.remote_ip = remote_vpn_ip
+
+        self.add_info('The tinc VPN was set up successfully!')
+
+        ssh.close()
+        return True
+
+    def display_messages(self):
+        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
+
     def setup_redundancy(self):
         #
         # Copy files in /etc/privacyidea
@@ -495,7 +662,7 @@ class Peer(object):
         self.ssh.exec_command("service apache2 start")
         self.add_info("\nRedundant setup complete.")
 
-        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
+        self.display_messages()
 
 
 class DBMenu(object):
@@ -571,6 +738,20 @@ class DBMenu(object):
             if code != self.d.DIALOG_OK:
                 return
             else:
+                code = self.d.yesno(
+                    "By default, communication between the MySQL peers is "
+                    "unencrypted. Optionally, the appliance tool can set up "
+                    "an encrypted tinc VPN tunnel between the two peers. "
+                    "Should we set up encrypted master-master replication?",
+                    width=60)
+                if code == self.d.DIALOG_OK:
+                    # TODO: Let user choose the subnet
+                    tinc_ready = self.peer.setup_tinc('172.20.1.1', '172.20.1.2', '172.20.1.0/30')
+                    self.peer.display_messages()
+                    if not tinc_ready:
+                        self.d.msgbox("The tinc VPN could not be set up. Thus, we abort the redundancy setup.")
+                        return
+
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
@@ -783,7 +964,8 @@ class BackupMenu(object):
         self.Backup.CP.read()
         choices = [(self.config, "Configure backup", ""),
                    (self.now, "Backup now", ""),
-                   (self.view, "View Backups", "")]
+                   (self.view, "View Backups", ""),
+                   (self.cleanup, "Set backup rotation", "")]
         while 1:
             menu = self.d.value_menu("Backup and Restore",
                                      choices=choices,
@@ -836,6 +1018,23 @@ class BackupMenu(object):
             else:
                 break
         pass
+
+    def cleanup(self):
+        """
+        Ask for a number of days and set these backup rotation
+        :return:
+        """
+        bt = "Set the number of days, backups should be saved"
+        code, bdays = self.d.inputbox("Enter number of days, for long we should keep the backups.",
+                                      width=70,
+                                      backtitle=bt)
+        if code == self.d.DIALOG_OK:
+            try:
+                days = int(bdays)
+            except ValueError:
+                days = 90
+            self.Backup.backup_clean(days)
+
 
     def add(self):
         '''
