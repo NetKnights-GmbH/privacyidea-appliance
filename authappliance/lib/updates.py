@@ -67,7 +67,7 @@ class Updates(object):
     def add_update_cronjob(self, date_fragments, type_=UPDATE_SECURITY, boot=False, clean=False):
         """
         Add an update cronjob to the crontab.
-        :param date_fragments: a list of 5 elements specifying the cronjob time
+        :param date_fragments: a list of at most 5 strings specifying the cronjob time
         :param type_: one of ('security', 'updates')
         :param boot: boolean determining if the system should reboot after updates
         :param clean: boolean determining if package files should be cleaned after updates
@@ -77,14 +77,10 @@ class Updates(object):
             command.append('-b')
         if clean:
             command.append('-c')
-        self.cp.cronjobs.append(CronJob(
+        self.cp.cronjobs.append(CronJob.from_time(
             ' '.join(command),
-            date_fragments[0],
             "root",
-            date_fragments[1],
-            date_fragments[2],
-            date_fragments[3],
-            date_fragments[4]
+            date_fragments
         ))
         self.cp.save(CRONTAB)
 

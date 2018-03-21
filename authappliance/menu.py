@@ -980,14 +980,8 @@ class UpdatesMenu(object):
             choices = [(self.add_update, "Add new update cronjob", "")]
             for cronjob, options in self.updates.get_update_cronjobs():
                 choices.append((partial(self.delete_update, cronjob),
-                                "Update '%s' packages at %s %s %s %s %s" % (
-                                    options['-t'],
-                                    cronjob.minute,
-                                    cronjob.hour,
-                                    cronjob.dom,
-                                    cronjob.month,
-                                    cronjob.dow),
-                                ""))
+                                " ".join(cronjob.time),
+                                "'{}' packages".format(options['-t'])))
             menu = self.d.value_menu("Updates",
                                      choices=choices,
                                      cancel='Back',
@@ -1013,9 +1007,6 @@ class UpdatesMenu(object):
         date_fragments = update_date.split()
         if len(date_fragments) > 5:
             return
-        # Extend with '*' until we have 5 elements
-        date_fragments.extend(['*'] * (5 - len(date_fragments)))
-        assert len(date_fragments) == 5
 
         update_type = self.d.value_radiolist("Please specify which updates should be installed.",
                                              choices=[
@@ -1034,8 +1025,8 @@ class UpdatesMenu(object):
         self.updates.add_update_cronjob(date_fragments, update_type, boot)
 
     def delete_update(self, cronjob):
-        code = self.d.yesno("Do you want to delete the following automatic update job?\n"
-                            "{}\nat {}".format(cronjob.command, "TODO"),
+        code = self.d.yesno("Do you want to delete the following automatic update job?\n\n"
+                            "{}\n{}".format(cronjob.command, cronjob.get_time_summary()),
                             width=70)
         if code == self.d.DIALOG_OK:
             self.updates.delete_cronjob(cronjob)
