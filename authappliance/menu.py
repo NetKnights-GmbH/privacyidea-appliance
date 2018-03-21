@@ -831,7 +831,7 @@ class AuditMenu(object):
 
     def menu(self):
         bt = "Audit Log Rotation"
-        self.Audit.CP.read()
+        self.Audit.read()
         while 1:
             code, tags = self.d.menu("Auditlog Rotate",
                                      choices=[("Configure Audit Log", "")],
@@ -850,39 +850,24 @@ class AuditMenu(object):
         bt = "Define rotation times."
         while 1:
             cronjobs = self.Audit.get_cronjobs()
-            choices = [("Add new rotate check date", "")]
+            choices = [(self.add, "Add new rotate check date", "")]
             for cronjob in cronjobs:
-                if cronjob.user == CRON_USER and \
-                        cronjob.command.startswith(AUDIT_CMD):
-                    comment = "audit rotation"
-                    if cronjob.minute != "*":
-                        comment = "hourly audit rotation."
-                    if cronjob.hour != "*":
-                        comment = "daily audit rotation."
-                    if cronjob.dow != "*":
-                        comment = "weekly audit rotation."
-                    if cronjob.dom != "*":
-                        comment = "monthly audit rotation."
-                    if cronjob.month != "*":
-                        comment = "yearly audit rotation."
-                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
-                                                        cronjob.hour,
-                                                        cronjob.dom,
-                                                        cronjob.month,
-                                                        cronjob.dow),
-                                    comment))
-            code, tags = self.d.menu("Here you can define times, when "
-                                     "to run a audit rotation check.",
-                                     cancel='Back',
-                                     choices=choices,
-                                     backtitle=bt,
-                                     width=70)
-
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add"):
-                    self.add()
+                comment = cronjob.get_time_comment()
+                if comment:
+                    full_comment = "{} audit rotation".format(comment)
                 else:
-                    self.delete(tags)
+                    full_comment = "audit rotation"
+                choices.append((partial(self.delete, cronjob),
+                                " ".join(cronjob.time),
+                                full_comment))
+            choice = self.d.value_menu("Here you can define times, when to run a audit rotation check.",
+                                       cancel='Back',
+                                       choices=choices,
+                                       backtitle=bt,
+                                       width=70)
+
+            if choice is not None:
+                choice()
             else:
                 break
 
@@ -930,42 +915,22 @@ class AuditMenu(object):
 
         if code == self.d.DIALOG_OK:
             date_fragments = bdate.split()
-            if len(date_fragments) == 5:
-                pass
-            elif len(date_fragments) == 4:
-                date_fragments.append('*')
-            elif len(date_fragments) == 3:
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 2:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 1:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            else:
+            if len(date_fragments) > 5:
                 return
             params = {"age": age,
                       "watermark": watermark}
             self.Audit.add_rotate(date_fragments, params)
 
-    def delete(self, tag):
+    def delete(self, cronjob):
         '''
         Delete the Audit rotation
         '''
         bt = "Delete an audit rotation"
-        (minute, hour, dom, month, dow) = tag.split()
-        code = self.d.yesno("Do you want to delete the audit rotation "
-                            "job at time %s:%s. "
-                            "Month:%s, Day of Month: %s, "
-                            "Day of week: %s?" %
-                            (hour, minute, month, dom, dow))
+        code = self.d.yesno("Do you want to delete the following audit rotation job?\n\n{}".format(
+            cronjob.get_time_summary()
+        ), backtitle=bt, width=70)
         if code == self.d.DIALOG_OK:
-            # Delete backup job.
-            self.Audit.del_rotate(None, hour, minute, month, dom, dow)
+            self.Audit.del_rotate(cronjob)
 
 
 class BackupMenu(object):
@@ -977,7 +942,7 @@ class BackupMenu(object):
 
     def menu(self):
         bt = "Backup and Restore configuration"
-        self.Backup.CP.read()
+        self.Backup.read()
         choices = [(self.config, "Configure backup", ""),
                    (self.now, "Backup now", ""),
                    (self.view, "View Backups", ""),
@@ -999,38 +964,25 @@ class BackupMenu(object):
         bt = "Define backup times"
         while 1:
             cronjobs = self.Backup.get_cronjobs()
-            choices = [("Add new backup date", "")]
+            choices = [(self.add, "Add new backup date", "")]
             for cronjob in cronjobs:
                 if cronjob.user == CRON_USER and \
                         cronjob.command.startswith(BACKUP_CMD):
-                    comment = "backup job."
-                    if cronjob.minute != "*":
-                        comment = "hourly backup job."
-                    if cronjob.hour != "*":
-                        comment = "daily backup job."
-                    if cronjob.dow != "*":
-                        comment = "weekly backup job."
-                    if cronjob.dom != "*":
-                        comment = "monthly backup job."
-                    if cronjob.month != "*":
-                        comment = "yearly backup job."
-                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
-                                                        cronjob.hour,
-                                                        cronjob.dom,
-                                                        cronjob.month,
-                                                        cronjob.dow),
-                                    comment))
-            code, tags = self.d.menu("Here you can define times, when "
-                                     "to run a backup.",
-                                     cancel='Back',
-                                     choices=choices,
-                                     backtitle=bt)
+                    comment = cronjob.get_time_comment()
+                    if comment:
+                        full_comment = "{} backup job.".format(comment)
+                    else:
+                        full_comment = "backup job."
+                    choices.append((partial(self.delete, cronjob),
+                                    " ".join(cronjob.time),
+                                    full_comment))
+            choice = self.d.value_menu("Here you can define times, when to run a backup.",
+                                       cancel='Back',
+                                       choices=choices,
+                                       backtitle=bt)
 
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add"):
-                    self.add()
-                else:
-                    self.delete(tags)
+            if choice is not None:
+                choice()
             else:
                 break
         pass
@@ -1068,40 +1020,21 @@ class BackupMenu(object):
 
         if code == self.d.DIALOG_OK:
             date_fragments = bdate.split()
-            if len(date_fragments) == 5:
-                pass
-            elif len(date_fragments) == 4:
-                date_fragments.append('*')
-            elif len(date_fragments) == 3:
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 2:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 1:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            else:
+            if len(date_fragments) > 5:
                 return
             self.Backup.add_backup_time(date_fragments)
 
-    def delete(self, tag):
+    def delete(self, cronjob):
         '''
         Delete a backup date
         '''
         bt = "Delete a backup date"
-        (minute, hour, dom, month, dow) = tag.split()
-        code = self.d.yesno("Do you want to delete the backup "
-                            "job at time %s:%s. "
-                            "Month:%s, Day of Month: %s, "
-                            "Day of week: %s?" %
-                            (hour, minute, month, dom, dow))
+        code = self.d.yesno("Do you want to delete the following backup job?\n\n{}".format(cronjob.get_time_summary()),
+                            backtitle=bt,
+                            width=70)
         if code == self.d.DIALOG_OK:
             # Delete backup job.
-            self.Backup.del_backup_time(hour, minute, month, dom, dow)
+            self.Backup.del_backup(cronjob)
 
     def restore(self, tag):
         '''
