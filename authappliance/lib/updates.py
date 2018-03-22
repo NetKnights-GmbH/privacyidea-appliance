@@ -64,7 +64,7 @@ class Updates(object):
             if cronjob.command.startswith(UPDATE_COMMAND):
                 yield (cronjob, parse_update_options(cronjob.command))
 
-    def add_update_cronjob(self, date_fragments, type_=UPDATE_SECURITY, boot=False, clean=False):
+    def add_update_cronjob(self, date_fragments, type_=UPDATE_SECURITY, boot=False, clean=True):
         """
         Add an update cronjob to the crontab.
         :param date_fragments: a list of at most 5 strings specifying the cronjob time
