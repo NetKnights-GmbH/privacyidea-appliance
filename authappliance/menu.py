@@ -296,15 +296,13 @@ class Peer(object):
 
     def _execute_remote_sql(self, sql):
         assert '"' not in sql
-        stdin, stdout, stderr = self.ssh.exec_command(
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh,
             'echo {} | mysql --defaults-extra-file=/etc/mysql/debian.cnf'.format(
                 self._escape_for_shell(sql)))
-        err = stderr.read()
-        if err:
+        if stderr:
             self.add_info("====== ERROR =======")
-            self.add_info(err)
-        output = stdout.read()
-        return output, err
+            self.add_info(stderr)
+        return stdout, stderr
 
     def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
         """
@@ -562,9 +560,9 @@ class Peer(object):
         self.add_info("Restarting remote MySQL server...")
         self.ssh.connect(str(self.remote_ip), username="root",
                          password=self.password)
-        stdin, stdout, stderr = self.ssh.exec_command("service mysql restart")
-        if stderr:
-            self.add_info(stderr.read())
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh, "service mysql restart")
+        if ret != 0:
+            self.add_info(stderr)
         #
         # Configuring mysql
         #
@@ -572,9 +570,9 @@ class Peer(object):
         self.add_info("Stopping local webserver")
         self.os.restart(service="apache2", action="stop")
         self.add_info("Stopping remote webserver")
-        stdin, stdout, stderr = self.ssh.exec_command("service apache2 stop")
-        if stderr:
-            self.add_info(stderr.read())
+        ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh, "service apache2 stop")
+        if ret != 0:
+            self.add_info(stderr)
 
         self.add_info("Configuring MySQL on local server...")
         # We start at 40, since 39 is "'" which might lead to confusion.
@@ -621,15 +619,14 @@ class Peer(object):
             os.unlink(dumpfile.name)
             # run the file remotely
             # mysql -u root -p < test.sql
-            stdin, stdout, stderr = self.ssh.exec_command(
+            ret, stdout, stderr = execute_ssh_command_and_wait(self.ssh,
                 "cat {dumpfile} | mysql --defaults-extra-file=/etc/mysql/debian.cnf".format(dumpfile=dumpfile.name))
-            err = stderr.read()
-            if err:
-                self.add_info("ERROR: {0}".format(err))
+            if stderr:
+                self.add_info("ERROR: {0}".format(stderr))
             else:
                 self.add_info("Dumped SQL database on remote server")
             # delete remote file
-            self.ssh.exec_command(
+            execute_ssh_command_and_wait(self.ssh,
                 "rm -f {dumpfile}".format(dumpfile=dumpfile.name))
         else:
             self.add_info("ERROR: {0}".format(err))
@@ -692,7 +689,7 @@ class Peer(object):
         self.add_info("Starting local webserver")
         self.os.restart(service="apache2", action="start")
         self.add_info("Starting remote webserver")
-        self.ssh.exec_command("service apache2 start")
+        execute_ssh_command_and_wait(self.ssh, "service apache2 start")
         self.add_info("\nRedundant setup complete.")
 
         self.display_messages()
@@ -735,15 +732,10 @@ class DBMenu(object):
                 self.peer.ssh.connect(str(self.peer.remote_ip),
                                       username="root",
                                       password=self.peer.password)
-                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                ret, output_pi, error_pi = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l privacyidea-apache2')
-                output_pi = stdout.read()
-                error_pi = stderr.read()
-
-                stdin, stdout, stderr = self.peer.ssh.exec_command(
+                ret, output_mysql, error_mysql = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l mysql-server')
-                output_mysql = stdout.read()
-                error_mysql = stderr.read()
                 self.peer.ssh.close()
                 if not output_mysql:
                     self.d.msgbox(
@@ -869,7 +861,7 @@ class AuditMenu(object):
 
     def menu(self):
         bt = "Audit Log Rotation"
-        self.Audit.CP.read()
+        self.Audit.read()
         while 1:
             code, tags = self.d.menu("Auditlog Rotate",
                                      choices=[("Configure Audit Log", "")],
@@ -888,39 +880,24 @@ class AuditMenu(object):
         bt = "Define rotation times."
         while 1:
             cronjobs = self.Audit.get_cronjobs()
-            choices = [("Add new rotate check date", "")]
+            choices = [(self.add, "Add new rotate check date", "")]
             for cronjob in cronjobs:
-                if cronjob.user == CRON_USER and \
-                        cronjob.command.startswith(AUDIT_CMD):
-                    comment = "audit rotation"
-                    if cronjob.minute != "*":
-                        comment = "hourly audit rotation."
-                    if cronjob.hour != "*":
-                        comment = "daily audit rotation."
-                    if cronjob.dow != "*":
-                        comment = "weekly audit rotation."
-                    if cronjob.dom != "*":
-                        comment = "monthly audit rotation."
-                    if cronjob.month != "*":
-                        comment = "yearly audit rotation."
-                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
-                                                        cronjob.hour,
-                                                        cronjob.dom,
-                                                        cronjob.month,
-                                                        cronjob.dow),
-                                    comment))
-            code, tags = self.d.menu("Here you can define times, when "
-                                     "to run a audit rotation check.",
-                                     cancel='Back',
-                                     choices=choices,
-                                     backtitle=bt,
-                                     width=70)
-
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add"):
-                    self.add()
+                comment = cronjob.get_time_comment()
+                if comment:
+                    full_comment = "{} audit rotation".format(comment)
                 else:
-                    self.delete(tags)
+                    full_comment = "audit rotation"
+                choices.append((partial(self.delete, cronjob),
+                                " ".join(cronjob.time),
+                                full_comment))
+            choice = self.d.value_menu("Here you can define times, when to run a audit rotation check.",
+                                       cancel='Back',
+                                       choices=choices,
+                                       backtitle=bt,
+                                       width=70)
+
+            if choice is not None:
+                choice()
             else:
                 break
 
@@ -968,42 +945,22 @@ class AuditMenu(object):
 
         if code == self.d.DIALOG_OK:
             date_fragments = bdate.split()
-            if len(date_fragments) == 5:
-                pass
-            elif len(date_fragments) == 4:
-                date_fragments.append('*')
-            elif len(date_fragments) == 3:
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 2:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 1:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            else:
+            if len(date_fragments) > 5:
                 return
             params = {"age": age,
                       "watermark": watermark}
             self.Audit.add_rotate(date_fragments, params)
 
-    def delete(self, tag):
+    def delete(self, cronjob):
         '''
         Delete the Audit rotation
         '''
         bt = "Delete an audit rotation"
-        (minute, hour, dom, month, dow) = tag.split()
-        code = self.d.yesno("Do you want to delete the audit rotation "
-                            "job at time %s:%s. "
-                            "Month:%s, Day of Month: %s, "
-                            "Day of week: %s?" %
-                            (hour, minute, month, dom, dow))
+        code = self.d.yesno("Do you want to delete the following audit rotation job?\n\n{}".format(
+            cronjob.get_time_summary()
+        ), backtitle=bt, width=70)
         if code == self.d.DIALOG_OK:
-            # Delete backup job.
-            self.Audit.del_rotate(None, hour, minute, month, dom, dow)
+            self.Audit.del_rotate(cronjob)
 
 
 class BackupMenu(object):
@@ -1015,7 +972,7 @@ class BackupMenu(object):
 
     def menu(self):
         bt = "Backup and Restore configuration"
-        self.Backup.CP.read()
+        self.Backup.read()
         choices = [(self.config, "Configure backup", ""),
                    (self.now, "Backup now", ""),
                    (self.view, "View Backups", ""),
@@ -1037,38 +994,25 @@ class BackupMenu(object):
         bt = "Define backup times"
         while 1:
             cronjobs = self.Backup.get_cronjobs()
-            choices = [("Add new backup date", "")]
+            choices = [(self.add, "Add new backup date", "")]
             for cronjob in cronjobs:
                 if cronjob.user == CRON_USER and \
                         cronjob.command.startswith(BACKUP_CMD):
-                    comment = "backup job."
-                    if cronjob.minute != "*":
-                        comment = "hourly backup job."
-                    if cronjob.hour != "*":
-                        comment = "daily backup job."
-                    if cronjob.dow != "*":
-                        comment = "weekly backup job."
-                    if cronjob.dom != "*":
-                        comment = "monthly backup job."
-                    if cronjob.month != "*":
-                        comment = "yearly backup job."
-                    choices.append(("%s %s %s %s %s" % (cronjob.minute,
-                                                        cronjob.hour,
-                                                        cronjob.dom,
-                                                        cronjob.month,
-                                                        cronjob.dow),
-                                    comment))
-            code, tags = self.d.menu("Here you can define times, when "
-                                     "to run a backup.",
-                                     cancel='Back',
-                                     choices=choices,
-                                     backtitle=bt)
+                    comment = cronjob.get_time_comment()
+                    if comment:
+                        full_comment = "{} backup job.".format(comment)
+                    else:
+                        full_comment = "backup job."
+                    choices.append((partial(self.delete, cronjob),
+                                    " ".join(cronjob.time),
+                                    full_comment))
+            choice = self.d.value_menu("Here you can define times, when to run a backup.",
+                                       cancel='Back',
+                                       choices=choices,
+                                       backtitle=bt)
 
-            if code == self.d.DIALOG_OK:
-                if tags.startswith("Add"):
-                    self.add()
-                else:
-                    self.delete(tags)
+            if choice is not None:
+                choice()
             else:
                 break
         pass
@@ -1106,40 +1050,21 @@ class BackupMenu(object):
 
         if code == self.d.DIALOG_OK:
             date_fragments = bdate.split()
-            if len(date_fragments) == 5:
-                pass
-            elif len(date_fragments) == 4:
-                date_fragments.append('*')
-            elif len(date_fragments) == 3:
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 2:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            elif len(date_fragments) == 1:
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-                date_fragments.append('*')
-            else:
+            if len(date_fragments) > 5:
                 return
             self.Backup.add_backup_time(date_fragments)
 
-    def delete(self, tag):
+    def delete(self, cronjob):
         '''
         Delete a backup date
         '''
         bt = "Delete a backup date"
-        (minute, hour, dom, month, dow) = tag.split()
-        code = self.d.yesno("Do you want to delete the backup "
-                            "job at time %s:%s. "
-                            "Month:%s, Day of Month: %s, "
-                            "Day of week: %s?" %
-                            (hour, minute, month, dom, dow))
+        code = self.d.yesno("Do you want to delete the following backup job?\n\n{}".format(cronjob.get_time_summary()),
+                            backtitle=bt,
+                            width=70)
         if code == self.d.DIALOG_OK:
             # Delete backup job.
-            self.Backup.del_backup_time(hour, minute, month, dom, dow)
+            self.Backup.del_backup(cronjob)
 
     def restore(self, tag):
         '''
