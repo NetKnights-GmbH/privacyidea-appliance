@@ -25,6 +25,8 @@ import time
 from functools import partial
 
 import pipes
+import shutil
+
 from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          ApacheConfig,
@@ -278,7 +280,7 @@ class Peer(object):
         self.add_info("Starting local webserver...")
         self.os.restart(service="apache2", action="start")
         self.add_info("done.")
-        self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
+        self.display_messages()
 
     def _execute_local_sql(self, sql):
         p = Popen(['mysql', '--defaults-extra-file=/etc/mysql/debian.cnf'],
@@ -307,6 +309,8 @@ class Peer(object):
         Set up a tinc tunnel between self.local_ip and self.remote_ip
         and update self.local_ip and self.remote_ip accordingly.
         """
+        self.add_info("Setting up the tinc VPN ...")
+
         # create SFTP client to remote server
         ssh = SSHClient()
         ssh.set_missing_host_key_policy(AutoAddPolicy())
@@ -462,6 +466,35 @@ class Peer(object):
 
         ssh.close()
         return True
+
+    def is_tinc_configured(self, vpn_name='privacyideaVPN'):
+        """ Return true if /etc/tinc/privacyideaVPN exists and /etc/tinc/nets.boot contains the VPN name """
+        if os.path.exists(os.path.join('/etc/tinc', vpn_name)):
+            nets_boot = NetsBoot(LocalIOHandler(), '/etc/tinc/nets.boot')
+            if vpn_name in nets_boot.nets:
+                return True
+        return False
+
+    def delete_tinc(self, vpn_name='privacyideaVPN'):
+        """ Stop and delete the tinc network """
+        self.info = ""
+        # Shutdown, ignore the return value
+        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True, stderr=PIPE)
+        proc.communicate()
+        self.add_info('tincd for {} has been shut down.'.format(vpn_name))
+
+        # Remove from nets.boot
+        nets_boot = NetsBoot(LocalIOHandler(), '/etc/tinc/nets.boot')
+        if vpn_name in nets_boot.nets:
+            nets_boot.remove(vpn_name)
+        nets_boot.save()
+        self.add_info('{} has been removed from /etc/tinc/nets.boot.'.format(vpn_name))
+        # Remove directory
+        vpn_directory = os.path.join('/etc/tinc', vpn_name)
+        shutil.rmtree(vpn_directory)
+
+        self.add_info('{} has been successfully deleted!'.format(vpn_name))
+        self.display_messages()
 
     def display_messages(self):
         self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
@@ -763,14 +796,19 @@ class DBMenu(object):
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
-        code = self.d.yesno(
-            "Do you really want to stop the redundancy? This "
-            "server will be reverted to a single master. The "
-            "other master will not be touched. You can simply "
-            "shut down the other machine.", width=60, height=10
-        )
+        message = ("Do you really want to stop the redundancy? This "
+                   "server will be reverted to a single master. The "
+                   "other master will not be touched. You can simply "
+                   "shut down the other machine.")
+        if self.peer.is_tinc_configured():
+            message += "\n"
+            message += "The tinc VPN 'privacyideaVPN' will also be deleted."
+
+        code = self.d.yesno(message, width=60, height=10)
         if code == self.d.DIALOG_OK:
             self.peer.stop_redundancy()
+            if self.peer.is_tinc_configured():
+                self.peer.delete_tinc()
 
     def redundancy_status(self):
         r, bind, server_id = self.db.is_redundant()
