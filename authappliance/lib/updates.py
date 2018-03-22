@@ -21,7 +21,7 @@ import shlex
 from authappliance.lib.appliance import CRONTAB
 from authappliance.lib.crontabparser.cronjobparser import CronJobParser, CronJob
 
-UPDATE_COMMAND = "pi-appliance-update"
+UPDATE_COMMAND = "/usr/bin/pi-appliance-update"
 UPDATE_SECURITY = 'security'
 UPDATE_UPDATES = 'updates'
 

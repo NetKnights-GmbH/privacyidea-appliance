@@ -1018,7 +1018,9 @@ class UpdatesMenu(object):
         if update_type is None:
             return
 
-        code = self.d.yesno("Should the system be rebooted after updates have been installed?",
+        code = self.d.yesno("Some updates might require a reboot to take effect, like installing a new kernel.\n"
+                            "Should the system be rebooted after the update, if the update requires a reboot?",
+                            width=70,
                             backtitle=bt)
         boot = (code == self.d.DIALOG_OK)
 
@@ -1784,7 +1786,7 @@ class MainMenu(object):
                         "Backup or Restore of privacyIDEA "
                         "configuration and database."))
         choices.append((self.updatesDialog.menu,
-                        "Automatic Updates", "",
+                        "Updates", "",
                         "Define times when the system should be updated automatically."))
         choices.append((self.auditDialog.menu,
                         "Audit Rotation", "",
