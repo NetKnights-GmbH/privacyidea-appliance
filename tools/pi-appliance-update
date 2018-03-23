@@ -34,14 +34,14 @@ function do_update_security {
 	log "### Downloading packages."
 	aptitude update >> $LOGFILE
 	log "### Starting update."
-	aptitude safe-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-security >> $LOGFILE
+	aptitude -q safe-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-security >> $LOGFILE
 }
 
 function do_update_updates {
 	log "### Downloading packages."
 	aptitude update >> $LOGFILE
 	log "### Starting update."
-	aptitude full-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-updates >> $LOGFILE
+	aptitude -q full-upgrade -o Aptitude::Delete-Unused=${CLEAN} --assume-yes --target-release `lsb_release -cs`-updates >> $LOGFILE
 }
 
 
