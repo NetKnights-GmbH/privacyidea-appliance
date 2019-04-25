@@ -1,18 +1,19 @@
 [submodule "authappliance/lib/crontabparser"]
 	path = authappliance/lib/crontabparser
-	url = https://github.com/privacyidea/crontabparser
+    branch = enable_python3
+	url = https://github.com/plettich/crontabparser
 [submodule "authappliance/lib/freeradiusparser"]
 	path = authappliance/lib/freeradiusparser
-	url = https://github.com/privacyidea/freeradiusparser
+    branch = enable_python3
+	url = https://github.com/plettich/freeradiusparser
 [submodule "authappliance/lib/networkparser"]
 	path = authappliance/lib/networkparser
-	url = https://github.com/privacyidea/networkparser.git
+	url = https://github.com/plettich/networkparser.git
 [submodule "authappliance/lib/mysqlparser"]
 	path = authappliance/lib/mysqlparser
-	url = https://github.com/privacyidea/mysqlparser.git
-[submodule "authappliance/lib/--force"]
-	path = authappliance/lib/--force
-	url = https://github.com/privacyidea/mysqlparser.git
+    branch = enable_python3
+	url = https://github.com/plettich/mysqlparser.git
 [submodule "authappliance/lib/tincparser"]
 	path = authappliance/lib/tincparser
-	url = https://github.com/privacyidea/tincparser.git
+    branch = enable_python3
+	url = https://github.com/plettich/tincparser.git

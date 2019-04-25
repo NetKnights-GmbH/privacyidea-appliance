@@ -29,7 +29,7 @@ setup(
     license='AGPL v3',
     author_email='cornelius@privacyidea.org',
     url='http://www.privacyidea.org',
-    install_requires=["python2-pythondialog"
+    install_requires=["pythondialog"
                       ],
     scripts=['authappliance/pi-appliance',
              'tools/pi-appliance-update'],
