@@ -264,7 +264,7 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         for l in content.split("\n"):
             if not l.startswith("import") and not l.startswith("#"):
                 try:
-                    k, v = l.split("=", 2)
+                    k, v = l.split("=", 1)
                     self.config[k.strip()] = v.strip().strip("'")
                 except Exception:
                     pass
