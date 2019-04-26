@@ -737,6 +737,9 @@ class DBMenu(object):
                     'dpkg -l privacyidea-apache2')
                 ret, output_mysql, error_mysql = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l mysql-server')
+                # Check if tinc is installed, just in case we need it later.
+                _, output_tinc, _ = execute_ssh_command_and_wait(self.peer.ssh, 'dpkg -l tinc')
+                tinc_installed = bool(output_tinc)
                 self.peer.ssh.close()
                 if not output_mysql:
                     self.d.msgbox(
@@ -771,6 +774,10 @@ class DBMenu(object):
                     "Should we set up encrypted master-master replication?",
                     width=60)
                 if code == self.d.DIALOG_OK:
+                    if not tinc_installed:
+                        self.d.msgbox("tinc is not installed on {0!s}. Please install tinc.".format(
+                            self.peer.remote_ip))
+                        return
                     code, subnet_string = self.d.inputbox("Please choose a subnet for the VPN which is "
                                                           "not yet used, using CIDR notation.",
                                                           init="172.20.1.0/30")
