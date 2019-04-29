@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #VERSION = "1.5dev9"
+from __future__ import print_function
 VERSION = "2.1dev1"
 from setuptools import setup, find_packages
 import os
@@ -16,7 +17,7 @@ def get_file_contents(file_path):
         full_path = os.path.join(package_directory, file_path)
         content = open(full_path, 'r').read()
     except:
-        print >> sys.stderr, "### could not open file: %r" % file_path
+        print("### could not open file: %r" % file_path, file=sys.stderr)
     return content
 
 
@@ -29,7 +30,13 @@ setup(
     license='AGPL v3',
     author_email='cornelius@privacyidea.org',
     url='http://www.privacyidea.org',
-    install_requires=["pythondialog"
+    install_requires=['pythondialog;python_version>="3.0"',
+                      'python2-pythondialog;python_version<"3.0"',
+                      'dbus-python',
+                      'netaddr',
+                      'paramiko',
+                      'pyparsing',
+                      'six'
                       ],
     scripts=['authappliance/pi-appliance',
              'tools/pi-appliance-update'],

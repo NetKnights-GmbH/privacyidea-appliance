@@ -7,3 +7,5 @@ venv/*
 htmlcov/*
 DEBUILD
 pi_appliance.egg-info/
+.coverage
+.pytest_cache/

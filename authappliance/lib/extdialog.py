@@ -41,7 +41,8 @@ class ExtDialog(dialog.Dialog):
         :param width: see ``menu``
         :param menu_height: see ``menu``
         :param choices: A list of tuples [(return_value1, tag1, ...), ...]
-        :return: The value specified in ``choices`` of the chosen item, or None if the user did not choose anything.
+        :return: The value specified in ``choices`` of the chosen item,
+                 or None if the user did not choose anything.
         """
         if choices is None:
             choices = []
@@ -55,7 +56,7 @@ class ExtDialog(dialog.Dialog):
             return_values[tag] = return_value
             processed_choices.append((tag,) + rest)
         code, result = self.menu(text, height, width, menu_height, processed_choices, **kwargs)
-        if code != self.DIALOG_OK:
+        if code != self.OK:
             return None
         return return_values[result]
 
@@ -63,7 +64,8 @@ class ExtDialog(dialog.Dialog):
                         choices=None, current=None,
                         **kwargs):
         """
-        Extended version of ``radiolist``. Given a list of value choices, let the user choose a value.
+        Extended version of ``radiolist``. Given a list of value choices,
+        let the user choose a value.
         This function may be handy because it allows to separate tags and return values.
 
         ``choices`` is a list of tuples like::
@@ -86,7 +88,8 @@ class ExtDialog(dialog.Dialog):
         :param menu_height: see ``menu``
         :param choices: A list of tuples [(return_value1, tag1, ...), ...]
         :param current: The currently chosen value (the item will be highlighted)
-        :return: The value specified in ``choices`` of the chosen item, or None if the user did not choose anything.
+        :return: The value specified in ``choices`` of the chosen item,
+                 or None if the user did not choose anything.
         """
         if choices is None:
             choices = []
@@ -109,6 +112,6 @@ class ExtDialog(dialog.Dialog):
             # [(tag, desc, status, help), ...]
             processed_choices.append((tag, rest[0], preselect) + rest[1:])
         code, result = self.radiolist(text, height, width, menu_height, processed_choices, **kwargs)
-        if code != self.DIALOG_OK:
+        if code != self.OK:
             return None
         return return_values[result]

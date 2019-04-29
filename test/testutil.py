@@ -1,7 +1,7 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import unittest
-
 import dialog
-
 from authappliance.menu import MainMenu
 from mockdialog import Handler, UserBehavior
 
@@ -24,6 +24,7 @@ class EscapeHandler(Handler):
                     'Unexpected yesno dialog: {!r}'.format(kwds['text'])
             return dialog.Dialog.OK
 
+
 class ApplianceBehavior(UserBehavior):
     def navigate(self, *choices):
         """
@@ -37,6 +38,7 @@ class ApplianceBehavior(UserBehavior):
         """
         for choice in choices:
             self.answer_menu(choice)
+
 
 class MenuTestCase(unittest.TestCase):
     def simulate_run(self, behavior, config_file=None):
