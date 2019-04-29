@@ -23,12 +23,11 @@ import string
 from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
+import random
 
-from authappliance.lib.mysqlparser.mysqlparser import MySQLParser
-from .mysqlparser import mysqlparser
-from .freeradiusparser.freeradiusparser import ClientConfParser, UserConfParser
-from .crontabparser.cronjobparser import CronJobParser, CronJob
-from os import urandom
+from authappliance.lib.mysqlparser import mysqlparser
+from authappliance.lib.freeradiusparser.freeradiusparser import ClientConfParser
+from authappliance.lib.crontabparser.cronjobparser import CronJobParser, CronJob
 import socket
 from subprocess import Popen, PIPE, call
 
@@ -48,9 +47,10 @@ SERVICE_APACHE = 'apache2'
 SERVICE_FREERADIUS = 'freeradius'
 SERVICE_LDAP_PROXY = 'privacyidea-ldap-proxy'
 
+
 def generate_password(size=6, characters=string.ascii_lowercase +
                       string.ascii_uppercase + string.digits):
-    return ''.join(urandom.choice(characters) for _x in range(size))
+    return ''.join(random.choice(characters) for _x in range(size))
 
 
 class Audit(object):
@@ -180,7 +180,8 @@ class Backup(object):
         self.CP.cronjobs.append(CronJob(bcmd, "0", hour="2"))
         self.CP.save(CRONTAB)
 
-    def _fix_cron_permissions(self, filename):
+    @staticmethod
+    def _fix_cron_permissions(filename):
         """
         Check if ``filename`` belongs to root. If it does, chown it to CRON_USER.
         Only call this as root.
@@ -208,7 +209,7 @@ class Backup(object):
         for f in allfiles:
             if f.startswith("privacyidea-backup"):
                 st = os.stat(self.data_dir + "/" + f)
-                size = "%iMB" % (int(st[ST_SIZE]) / (1024 * 1024))
+                size = "%iMB" % (int(st[ST_SIZE]) // (1024 * 1024))
                 mtime = time.asctime(time.localtime(st[ST_MTIME]))
                 backups[f] = {"size": size,
                               "time": mtime}
@@ -255,11 +256,17 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
             self.initialize()
         else:
             # read the file
-            with opener(self.file, 'rb') as f:
+            with opener(self.file, 'r') as f:
                 content = f.read()
             self._content_to_config(content)
 
     def _content_to_config(self, content):
+        """
+
+        :param content:
+        :type content: str
+        :return:
+        """
         self.config = {}
         for l in content.split("\n"):
             if not l.startswith("import") and not l.startswith("#"):
@@ -277,14 +284,14 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         self._content_to_config(content)
 
     def save(self):
-        with self.opener(self.file, 'wb') as f:
+        with self.opener(self.file, 'w') as f:
             f.write("import logging\n")
             for k, v in self.config.items():
                 if k in ["PI_LOGLEVEL", "SUPERUSER_REALM"]:
                     f.write("%s = %s\n" % (k, v))
                 else:
                     f.write("%s = '%s'\n" % (k, v))
-        print "Config file %s saved." % self.file
+        print("Config file %s saved." % self.file)
 
     def get_keyfile(self):
         return self.config.get("PI_ENCFILE")
@@ -319,17 +326,17 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         private = self.config.get("PI_AUDIT_KEY_PRIVATE")
         public = self.config.get("PI_AUDIT_KEY_PUBLIC")
 
-        print "Create private key %s" % private
+        print("Create private key %s" % private)
         r = call("openssl genrsa -out %s 2048" % private,
                  shell=True)
         if r == 0:
-            print "create private key: %s" % private
+            print("create private key: %s" % private)
 
-        print "Create public key %s" % public
+        print("Create public key %s" % public)
         r = call("openssl rsa -in %s -pubout -out %s" % (private, public),
                  shell=True)
         if r == 0:
-            print "written public key: %s" % private
+            print("written public key: %s" % private)
             return True, private
         
         return False, private
@@ -342,7 +349,7 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         r = call("dd if=/dev/urandom of='%s' bs=1 count=96" % enckey,
                  shell=True)
         if r == 0:
-            print "written enckey: %s" % enckey
+            print("written enckey: %s" % enckey)
             return True, enckey
         return False, enckey
 
@@ -381,7 +388,7 @@ class FreeRADIUSConfig(object):
         '''
         if client:
             clients = self.clients_get()
-            for client, attributes in client.iteritems():
+            for client, attributes in client.items():
                 clients[client] = attributes
             
             self.ccp.save(clients, self.config_file)
@@ -464,10 +471,10 @@ class OSConfig(object):
         r = p.returncode
         if r == 0:
             if echo:
-                print "Rebooting system."
+                print("Rebooting system.")
         else:
             if echo:
-                print _err
+                print(_err)
 
     def halt(self, echo=False):
         """
@@ -481,10 +488,10 @@ class OSConfig(object):
         r = p.returncode
         if r == 0:
             if echo:
-                print "Halting system."
+                print("Halting system.")
         else:
             if echo:
-                print _err
+                print(_err)
 
     def set_password(self, username):
         call(["passwd", username])
@@ -498,10 +505,10 @@ class OSConfig(object):
         r = p.returncode
         if r == 0:
             if echo:
-                print "Password changed."
+                print("Password changed.")
         else:
             if echo:
-                print _err
+                print(_err)
 
     def get_diskfree(self):
         # TODO: get the disk size
@@ -516,7 +523,7 @@ class OSConfig(object):
                   stderr=PIPE)
         _output, _err = p.communicate()
         r = p.returncode
-        print r
+        print(r)
 
     @classmethod
     def ifup(cls, iface):
@@ -527,7 +534,7 @@ class OSConfig(object):
                   stderr=PIPE)
         _output, _err = p.communicate()
         r = p.returncode
-        print r
+        print(r)
 
     @classmethod
     def restart(cls, service=None, do_print=False, action="restart"):
@@ -553,10 +560,11 @@ class OSConfig(object):
         r = p.returncode
         if r == 0:
             if do_print:
-                print "Service %s %s" % (service, action)
+                print("Service %s %s" % (service, action))
         else:
             if do_print:
-                print _err
+                print(_err)
+
 
 class ApacheConfig(object):
 
@@ -575,10 +583,10 @@ class ApacheConfig(object):
         f.close()
 
         for l in content.split("\n"):
-            m = re.match("\s*SSLCertificateKeyFile\s*(.*)", l)
+            m = re.match(r"\s*SSLCertificateKeyFile\s*(.*)", l)
             if m:
                 key = m.group(1)
-            m = re.match("\s*SSLCertificateFile\s*(.*)", l)
+            m = re.match(r"\s*SSLCertificateFile\s*(.*)", l)
             if m:
                 cert = m.group(1)
 
@@ -602,7 +610,7 @@ class ApacheConfig(object):
         for f in allfiles:
             if f[-4:].lower() in [".pem", ".crt", ".cer", ".der"]:
                 st = os.stat(homedir + "/" + f)
-                size = "%iMB" % (int(st[ST_SIZE]) / (1024 * 1024))
+                size = "%iMB" % (int(st[ST_SIZE]) // (1024 * 1024))
                 mtime = time.asctime(time.localtime(st[ST_MTIME]))
                 try:
                     f = f.decode("ascii")
@@ -654,9 +662,9 @@ class ApacheConfig(object):
                                    hostname=hostname))
         r = call(command, shell=True)
         if r == 0:
-            print "Created the self signed certificate"
+            print("Created the self signed certificate")
         else:
-            print "Failed to create self signed certificate: %i" % r
+            print("Failed to create self signed certificate: %i" % r)
             sys.exit(r)
 
     def generate_csr(self, hostname=None):
@@ -670,9 +678,9 @@ class ApacheConfig(object):
                    "{csr}".format(key=keyfile, csr=csr, hostname=hostname))
         r = call(command, shell=True)
         if r == 0:
-            print "Created the CSR."
+            print("Created the CSR.")
         else:
-            print "Failed to create CSR: %i" % r
+            print("Failed to create CSR: %i" % r)
             sys.exit(r)
         return csr
 
@@ -769,7 +777,8 @@ class WebserverConfig(object):
             os.unlink(self.default_dir_enabled[i] + "/" + self.configfile[i])
         return
 
-    def _get_val(self, data, key):
+    @staticmethod
+    def _get_val(data, key):
         '''
         returns a value for a given key from a list of tuples.
         '''
@@ -806,10 +815,10 @@ class WebserverConfig(object):
                         hostname))
             r = call(command, shell=True)
             if r == 0:
-                print "Created the certificate and the key."
+                print("Created the certificate and the key.")
                 os.chmod(certificates[1], 0x400)
             else:
-                print "Failed to create key and certificate: %i" % r
+                print("Failed to create key and certificate: %i" % r)
                 sys.exit(r)
 
 
@@ -855,6 +864,7 @@ class MySQLConfig(object):
     def restart(self):
         call("service mysql restart", shell=True)
 
+
 class RemoteMySQLConfig(MySQLConfig):
 
     def __init__(self, sftp):
@@ -868,6 +878,3 @@ class RemoteMySQLConfig(MySQLConfig):
 
     def restart(self):
         raise NotImplementedError()
-
-
-

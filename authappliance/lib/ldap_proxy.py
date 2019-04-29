@@ -74,12 +74,14 @@ strategy = string
 strategy = string
 """
 
+
 def extract_from_endpoint(endpoint, attribute):
-    match = re.search(attribute + '=([^:]+)', endpoint)
+    match = re.search(attribute + r'=([^:]+)', endpoint)
     if match is not None:
         return match.group(1)
     else:
         return ''
+
 
 def _load_config(filename):
     with open(filename, 'r') as f:
@@ -87,16 +89,18 @@ def _load_config(filename):
 
     validator = validate.Validator()
     result = config.validate(validator, preserve_errors=True)
-    if result != True:
+    if not result:
         print('Invalid LDAP Proxy configuration at {!r}: {!r}'.format(filename, result))
         sys.exit(1)
     return config
+
 
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
         self.filename = filename
         self.reset()
         self.autosave_enabled = True
+        self.config = None
 
     def reset(self):
         if self.exists:
@@ -107,7 +111,7 @@ class LDAPProxyConfig(object):
     @property
     def initialized(self):
         if self.exists:
-            self.reset() # ?
+            self.reset()  # ?
             protocol, host, port = self.backend_settings
             if host == '192.0.2.1':
                 # this host is used in the default config shipped with the ldap-proxy ubuntu package
@@ -126,11 +130,12 @@ class LDAPProxyConfig(object):
         self.config['bind-cache'] = {'enabled': False}
         self.config['app-cache'] = {'enabled': False}
         self.config.setdefault('ldap-backend', {})['use-tls'] = False
-        self.config.setdefault('ldap-backend', {})['test-connection'] = False # TODO
+        self.config.setdefault('ldap-backend', {})['test-connection'] = False
         privacyidea_cert, _ = ApacheConfig().get_certificates()
         self.config['privacyidea'] = {
-            'instance': 'https://{}'.format(socket.getfqdn()), # TODO: should probably use the hostname from the cert?
-                                                               # Or disable validation entirely?
+            # TODO: should probably use the hostname from the cert?
+            #  Or disable validation entirely?
+            'instance': 'https://{}'.format(socket.getfqdn()),
             'certificate': privacyidea_cert,
         }
         self.autosave()
@@ -275,6 +280,7 @@ class LDAPProxyConfig(object):
         ldap_proxy_settings['bind-service-account'] = bind_service_account
         self.autosave()
 
+
 class LDAPProxyService(object):
     def __init__(self):
         self.bus = dbus.SystemBus()
@@ -314,7 +320,8 @@ class LDAPProxyService(object):
         # TODO: Should we rather only check for 'active'?
         return state in ('active', 'reloading', 'activating')
 
-    def _invoke_systemctl(self, arguments):
+    @staticmethod
+    def _invoke_systemctl(arguments):
         proc = subprocess.Popen(['systemctl'] + arguments,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
@@ -329,4 +336,3 @@ class LDAPProxyService(object):
 
     def stop(self):
         return self._invoke_systemctl(['stop', LDAP_PROXY_UNIT_FILE])
-

@@ -27,17 +27,16 @@ from functools import partial
 import pipes
 import shutil
 
-from dialog import Dialog
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          ApacheConfig,
                                          PrivacyIDEAConfig,
                                          OSConfig, MySQLConfig,
                                          DEFAULT_CONFIG,
-                                         CRON_USER, AUDIT_CMD, BACKUP_CMD, RemoteMySQLConfig, SERVICE_APACHE,
+                                         CRON_USER, BACKUP_CMD, RemoteMySQLConfig,
+                                         SERVICE_APACHE,
                                          SERVICE_FREERADIUS, SERVICE_LDAP_PROXY)
 from privacyidea.lib.auth import (create_db_admin, get_db_admins,
                                   delete_db_admin)
-from privacyidea.models import Admin
 from privacyidea.app import create_app
 from netaddr import IPAddress, IPNetwork, AddrFormatError
 from paramiko.client import SSHClient
@@ -49,7 +48,8 @@ from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
-from authappliance.lib.tincparser.tincparser import TincConfFile, LocalIOHandler, SFTPIOHandler, UpScript, NetsBoot
+from authappliance.lib.tincparser.tincparser import (TincConfFile, LocalIOHandler,
+                                                     SFTPIOHandler, UpScript, NetsBoot)
 from authappliance.lib.updates import Updates, UPDATE_UPDATES, UPDATE_SECURITY
 from authappliance.lib.utils import execute_ssh_command_and_wait
 
@@ -108,7 +108,7 @@ class WebserverMenu(object):
     def generate_self(self):
         code = self.d.yesno("Do you want to recreate the self signed "
                             "certificate?")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.apache.create_self_signed()
             mark_service_for_restart(SERVICE_APACHE)
 
@@ -125,7 +125,7 @@ class WebserverMenu(object):
                                           ("4096", "4096 bit"),
                                           ("8192", "8192 bit")],
                                  backtitle="Regenerate private key")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.apache.create_private_key(tags)
             mark_service_for_restart(SERVICE_APACHE)
 
@@ -163,14 +163,14 @@ class WebserverMenu(object):
                                      choices=choices,
                                      backtitle=bt,
                                      width=78)
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 self.apache.import_cert(homedir + "/" + tags, cert)
                 mark_service_for_restart(SERVICE_APACHE)
 
     def restart(self):
         code = self.d.yesno("Do you want to restart the services for the "
                             "changes to take effect?")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.os.restart(SERVICE_APACHE)
 
 
@@ -213,7 +213,7 @@ class Peer(object):
         code, ip = self.d.inputbox(
             "Enter the IP Address of the other privacyIDEA server.",
             backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
 
         try:
@@ -228,7 +228,7 @@ class Peer(object):
             "You need to change 'PermitRootLogin' in the "
             "/etc/ssh/sshd_config. Otherwise authentication will fail.",
             insecure=True, backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
 
         self.password = password
@@ -236,7 +236,7 @@ class Peer(object):
         code, local_ip = self.d.inputbox(
             "Enter the local IP Address of this machine, to which the remote "
             "server will connect.", backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
 
         try:
@@ -541,13 +541,13 @@ class Peer(object):
 
         self.add_info("Setup my.cnf on local server...")
 
-        for key, value in shared_my_cnf_values.items() + local_my_cnf_values.items():
+        for key, value in list(shared_my_cnf_values.items()) + list(local_my_cnf_values.items()):
             self.dbConfig.set('mysqld', key, value)
 
         self.add_info("Setup my.cnf on remote server...")
 
         remote_my_cnf = RemoteMySQLConfig(sftp)
-        for key, value in shared_my_cnf_values.items() + remote_my_cnf_values.items():
+        for key, value in list(shared_my_cnf_values.items()) + list(remote_my_cnf_values.items()):
             remote_my_cnf.set('mysqld', key, value)
 
         sftp.close()
@@ -761,7 +761,7 @@ class DBMenu(object):
                 "Data will be cloned to the remote server. All "
                 "privacyIDEA data on the remote server will be "
                 "lost. Shall we proceed?", width=60)
-            if code != self.d.DIALOG_OK:
+            if code != self.d.OK:
                 return
             else:
                 code = self.d.yesno(
@@ -770,11 +770,11 @@ class DBMenu(object):
                     "an encrypted tinc VPN tunnel between the two peers. "
                     "Should we set up encrypted master-master replication?",
                     width=60)
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     code, subnet_string = self.d.inputbox("Please choose a subnet for the VPN which is "
                                                           "not yet used, using CIDR notation.",
                                                           init="172.20.1.0/30")
-                    if code == self.d.DIALOG_OK:
+                    if code == self.d.OK:
                         try:
                             subnet = IPNetwork(subnet_string)
                         except AddrFormatError:
@@ -806,7 +806,7 @@ class DBMenu(object):
             message += "The tinc VPN 'privacyideaVPN' will also be deleted."
 
         code = self.d.yesno(message, width=60, height=10)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.peer.stop_redundancy()
             if self.peer.is_tinc_configured():
                 self.peer.delete_tinc()
@@ -845,7 +845,7 @@ class DBMenu(object):
                             db_connect,
                             width=70,
                             backtitle="Create database tables")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             r = self.pConfig.DB_init()
             if r:
                 self.d.msgbox("Created database tables.")
@@ -868,7 +868,7 @@ class AuditMenu(object):
                                      choices=[("Configure Audit Log", "")],
                                      cancel='Back',
                                      backtitle=bt)
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 if tags.startswith("Configure"):
                     self.config()
             else:
@@ -919,7 +919,7 @@ class AuditMenu(object):
                                           "the highwatermark, the entries "
                                           "will be deleted to lowwatermark.")],
                                 backtitle=bt, item_help=1)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
 
         if typ.startswith("by age"):
@@ -933,7 +933,7 @@ class AuditMenu(object):
                                               width=70,
                                               backtitle=bt)
 
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
 
         code, bdate = self.d.inputbox("The date to run the audit rotation. "
@@ -944,7 +944,7 @@ class AuditMenu(object):
                                       width=70,
                                       backtitle=bt)
 
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             date_fragments = bdate.split()
             if len(date_fragments) > 5:
                 return
@@ -960,7 +960,7 @@ class AuditMenu(object):
         code = self.d.yesno("Do you want to delete the following audit rotation job?\n\n{}".format(
             cronjob.get_time_summary()
         ), backtitle=bt, width=70)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.Audit.del_rotate(cronjob)
 
 class UpdatesMenu(object):
@@ -996,7 +996,7 @@ class UpdatesMenu(object):
                                       width=70,
                                       backtitle=bt)
 
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
 
         date_fragments = update_date.split()
@@ -1017,7 +1017,7 @@ class UpdatesMenu(object):
                             "Should the system be rebooted after the update, if the update requires a reboot?",
                             width=70,
                             backtitle=bt)
-        boot = (code == self.d.DIALOG_OK)
+        boot = (code == self.d.OK)
 
         self.updates.add_update_cronjob(date_fragments, update_type, boot)
 
@@ -1025,7 +1025,7 @@ class UpdatesMenu(object):
         code = self.d.yesno("Do you want to delete the following automatic update job?\n\n"
                             "{}\n{}".format(cronjob.command, cronjob.get_time_summary()),
                             width=70)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.updates.delete_cronjob(cronjob)
 
 class BackupMenu(object):
@@ -1091,7 +1091,7 @@ class BackupMenu(object):
         code, bdays = self.d.inputbox("Enter number of days, for long we should keep the backups.",
                                       width=70,
                                       backtitle=bt)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             try:
                 days = int(bdays)
             except ValueError:
@@ -1113,7 +1113,7 @@ class BackupMenu(object):
                                       width=70,
                                       backtitle=bt)
 
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             date_fragments = bdate.split()
             if len(date_fragments) > 5:
                 return
@@ -1127,7 +1127,7 @@ class BackupMenu(object):
         code = self.d.yesno("Do you want to delete the following backup job?\n\n{}".format(cronjob.get_time_summary()),
                             backtitle=bt,
                             width=70)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             # Delete backup job.
             self.Backup.del_backup(cronjob)
 
@@ -1144,7 +1144,7 @@ class BackupMenu(object):
                             "perform a backup before restoring the old one."
                             % tag,
                             width=70)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             # Restore the backup
             self.d.gauge_start("Restoring backup %s" % tag, percent=20)
             success, stdout, stderr = self.Backup.restore_backup(tag)
@@ -1186,7 +1186,7 @@ Backup failed:
         while 1:
             backups = self.Backup.get_backups()
             choices = []
-            for bfile in sorted(backups.keys(), reverse=True):
+            for bfile in sorted(list(backups.keys()), reverse=True):
                 choices.append((bfile, "%s %s" % (backups[bfile].get("size"),
                                                   backups[bfile].get("time"))))
             if len(choices) == 0:
@@ -1198,7 +1198,7 @@ Backup failed:
                                          choices=choices,
                                          backtitle=bt,
                                          width=78)
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     self.restore(tags)
                 else:
                     break
@@ -1239,7 +1239,7 @@ class RadiusMenu(object):
                                       "exactly what you are doing!",
                                       choices=sites,
                                       backtitle="Enable sites")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.RadiusConfig.enable_sites(tags)
             mark_service_for_restart(SERVICE_FREERADIUS)
 
@@ -1247,7 +1247,7 @@ class RadiusMenu(object):
         while 1:
             clients = [("Add new client", "Add a new RADIUS client")]
             clients_from_file = self.RadiusConfig.clients_get()
-            for client, v in clients_from_file.items():
+            for client, v in list(clients_from_file.items()):
                 clients.append((client, "%s/%s (%s)" % (v.get("ipaddr"),
                                                         v.get("netmask"),
                                                         v.get("shortname"))))
@@ -1258,7 +1258,7 @@ class RadiusMenu(object):
                                      cancel='Back',
                                      backtitle="Manage RADIUS clients")
 
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 if tags.startswith("Add new"):
                     self.add()
                 else:
@@ -1270,12 +1270,12 @@ class RadiusMenu(object):
         bt = "Add a new RADIUS client"
         code, clientname = self.d.inputbox("The name of the new client",
                                            backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
         code, ip = self.d.inputbox("The IP address of the new client %s" %
                                    clientname,
                                    backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
 
         code, netmask = self.d.radiolist("The netmask of the new client %s." % clientname,
@@ -1316,7 +1316,7 @@ class RadiusMenu(object):
                                                   ("31", "255.255.255.254", 0)
                                                   ],
                                          backtitle=bt)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
 
         code, secret = self.d.inputbox("The secret of the new client %s" %
@@ -1327,7 +1327,7 @@ class RadiusMenu(object):
                                           clientname,
                                           backtitle=bt)
 
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             client = {}
             if ip:
                 client["ipaddr"] = ip
@@ -1345,11 +1345,11 @@ class RadiusMenu(object):
         code, tags = self.d.menu("Manage client %s." % clientname,
                                  choices=[("Delete client", "")],
                                  backtitle=bt)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             if tags.startswith("Delete"):
                 code = self.d.yesno("Do you really want to delete the "
                                     "RADIUS client %s?" % clientname)
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     self.RadiusConfig.client_delete(clientname)
                     mark_service_for_restart(SERVICE_FREERADIUS)
 
@@ -1464,7 +1464,7 @@ class LDAPProxyMenu(object):
                                                 "the privacyIDEA username.",
                                                 width=70,
                                                 init=current_pattern)
-                if code != self.d.DIALOG_OK:
+                if code != self.d.OK:
                     return False
                 self.config.set_user_mapping_config({
                     'strategy': 'match',
@@ -1478,7 +1478,7 @@ class LDAPProxyMenu(object):
                                                   "contains the privacyIDEA username.",
                                                   width=70,
                                                   init=current_attribute)
-                if code != self.d.DIALOG_OK:
+                if code != self.d.OK:
                     return False
                 self.config.set_user_mapping_config({
                     'strategy': 'lookup',
@@ -1514,7 +1514,7 @@ class LDAPProxyMenu(object):
                                           "the privacyIDEA default realm.",
                                           width=70,
                                           init=current_realm)
-            if code != self.d.DIALOG_OK:
+            if code != self.d.OK:
                 return False
             self.config.set_realm_mapping_config({
                 'strategy': 'static',
@@ -1546,12 +1546,12 @@ class LDAPProxyMenu(object):
         code, dn = self.d.inputbox('Please enter the Distinguished Name of the Service Account:',
                                    init=service_account_dn,
                                    width=60)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
         code, password = self.d.passwordbox('Please enter the password of the Service Account:\n'
                                             '(your typing will not be visible)',
                                             width=60)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
         # if the given password is empty, the user probably wants to re-use the currently set password
         # TODO: What if the password is intentionally empty?
@@ -1565,7 +1565,7 @@ class LDAPProxyMenu(object):
         code, dn = self.d.inputbox('Please enter the Distinguished Name for which LDAP Bind Requests '
                                    'should be forwarded directly to the LDAP Backend:',
                                    width=60)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return
         self.config.add_passthrough_bind(dn)
         self.mark_for_restart()
@@ -1573,7 +1573,7 @@ class LDAPProxyMenu(object):
     def remove_passthrough_bind(self, dn):
         code = self.d.yesno("Do you really want to delete the Passthrough Bind DN\n{}?".format(dn),
                             width=60)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.config.remove_passthrough_bind(dn)
             self.mark_for_restart()
 
@@ -1586,7 +1586,7 @@ class LDAPProxyMenu(object):
         code, interface = self.d.inputbox('Please enter the interface to serve the LDAP proxy on (leave '
                                           'blank to listen on all interfaces):',
                                           init=current_interface)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
         # TODO: Test connection?
         endpoint = self._build_server_endpoint_string(port, interface)
@@ -1597,7 +1597,7 @@ class LDAPProxyMenu(object):
     def _ask_for_ldap_port(self, message, init=''):
         while True:
             code, port_string = self.d.inputbox(message, init=init)
-            if code != self.d.DIALOG_OK:
+            if code != self.d.OK:
                 return None
             try:
                 if port_string:
@@ -1612,7 +1612,7 @@ class LDAPProxyMenu(object):
         current_protocol, current_host, current_port = self.config.backend_settings
         code, host = self.d.inputbox('Please enter the IP address of the LDAP backend:',
                                      init=current_host)
-        if code != self.d.DIALOG_OK:
+        if code != self.d.OK:
             return False
         port = self._ask_for_ldap_port('Please enter the port to connect to (default: 389):',
                                        init=current_port)
@@ -1723,7 +1723,7 @@ class MainMenu(object):
         if services_for_restart:
             code = self.d.yesno("Do you want to restart the services for the "
                                 "changes to take effect?")
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 for service in services_for_restart:
                     OSConfig.restart(service, True)
                 reset_services_for_restart()
@@ -1830,7 +1830,7 @@ class MainMenu(object):
                                      cancel='Back',
                                      backtitle="Manage administrators")
 
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 if tags == "Add new admin":
                     self.privacyidea_admin_add()
                 else:
@@ -1844,11 +1844,11 @@ class MainMenu(object):
                                  choices=[("Delete admin", ""),
                                           ("Change password", "")],
                                  backtitle=bt)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             if tags.startswith("Delete"):
                 code = self.d.yesno("Do you really want to delete the "
                                     "administrator %s?" % admin_name)
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     with self.app.app_context():
                         delete_db_admin(admin_name)
 
@@ -1867,10 +1867,10 @@ class MainMenu(object):
                                                  admin_name,
                                                  backtitle=bt)
 
-            if code == self.d.DIALOG_OK:
+            if code == self.d.OK:
                 code, password2 = self.d.passwordbox("Repeat the password",
                                                      backtitle=bt)
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     if password1 != password2:
                         self.d.msgbox("The passwords do not match. "
                                       "Please try again.")
@@ -1892,7 +1892,7 @@ class MainMenu(object):
                                            "administrator",
                                            backtitle=bt)
 
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             password = self.privacyidea_admin_password(admin_name,
                                                        create=True)
 
@@ -1906,7 +1906,7 @@ class MainMenu(object):
                                      init=adminrealms,
                                      width=40,
                                      backtitle="configure admin realms")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             # convert to list with no whitespaces in elemtents
             adminrealms = [x.strip() for x in tags.split(",")]
             self.pConfig.set_superusers(adminrealms)
@@ -1919,7 +1919,7 @@ class MainMenu(object):
                             "configurations will be overwritten!",
                             backtitle="Initialize privacyIDEA configuration",
                             defaultno=1)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.pConfig.initialize()
             self.pConfig.save()
             mark_service_for_restart(SERVICE_APACHE)
@@ -1929,7 +1929,7 @@ class MainMenu(object):
                             "All token keys will not be readable anymore!",
                             backtitle="Create a new encryption key.",
                             defaultno=1)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             r, f = self.pConfig.create_encryption_key()
             if r:
                 self.d.msgbox("Successfully created new encryption key %s." %
@@ -1944,7 +1944,7 @@ class MainMenu(object):
                             "Older audit entries can not be verified anymore.",
                             backtitle="Create a new signing key.",
                             defaultno=1)
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             r, f = self.pConfig.create_audit_keys()
             if r:
                 self.d.msgbox("Successfully created new audit keys %s." %
@@ -1965,7 +1965,7 @@ class MainMenu(object):
                      ("logging.ERROR", "Sparse logging.",
                       int(loglevel == "logging.ERROR"))],
             backtitle="privacyIDEA loglevel.")
-        if code == self.d.DIALOG_OK:
+        if code == self.d.OK:
             self.pConfig.set_loglevel(tags)
             self.pConfig.save()
             mark_service_for_restart(SERVICE_APACHE)
