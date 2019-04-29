@@ -177,6 +177,8 @@ class WebserverMenu(object):
 class Peer(object):
     files = ["/etc/privacyidea/enckey", "/etc/privacyidea/logging.cfg",
              "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
+    freeradius_files = ["/etc/privacyidea/rlm_perl.ini",
+                        "/etc/freeradius/clients.conf"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
                  password=None, local_ip=None):
@@ -500,6 +502,33 @@ class Peer(object):
     def display_messages(self):
         self.d.scrollbox(self.info.decode('utf-8'), height=20, width=60)
 
+    def setup_freeradius(self):
+        """
+        Copy /etc/freeradius/clients.conf and /etc/privacyidea/rlm_perl.ini to the remote
+        peer and restart the freeradius daemon.
+        """
+        self.info = ""
+        self.add_info("copying FreeRADIUS configuration:")
+        # create SSH and SFTP client to remote server
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(AutoAddPolicy())
+        ssh.connect(str(self.remote_ip), username="root", password=self.password)
+        sftp = ssh.open_sftp()
+
+        # Copy configuration files to remote server
+        for file in self.freeradius_files:
+            if os.path.exists(file):
+                self.add_info(file)
+                sftp.put(file, file)
+        self.add_info("")
+        self.add_info("Restarting remote FreeRADIUS server ...")
+        execute_ssh_command_and_wait(ssh, "service freeradius restart")
+        self.add_info("... done!")
+
+        ssh.close()
+        self.display_messages()
+        return True
+
     def setup_redundancy(self):
         #
         # Copy files in /etc/privacyidea
@@ -735,6 +764,8 @@ class DBMenu(object):
                                       password=self.peer.password)
                 ret, output_pi, error_pi = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l privacyidea-apache2')
+                ret, output_radius, error_radius = execute_ssh_command_and_wait(self.peer.ssh,
+                    'dpkg -l privacyidea-radius')
                 ret, output_mysql, error_mysql = execute_ssh_command_and_wait(self.peer.ssh,
                     'dpkg -l mysql-server')
                 # Check if tinc is installed, just in case we need it later.
@@ -754,6 +785,7 @@ class DBMenu(object):
                         "privacyidea-apache2.".format(
                             self.peer.remote_ip))
                     return
+                radius_installed = bool(output_radius)
             except SSHException as exx:
                 self.d.msgbox("{0!s}".format(exx))
                 return
@@ -800,7 +832,18 @@ class DBMenu(object):
                             return
                     else:
                         return
-
+                code = self.d.yesno(
+                    "The privacyIDEA appliance includes a FreeRADIUS server that redirects authentication requests "
+                    "to the local privacyIDEA instance. Should we copy the current local FreeRADIUS configuration to "
+                    "the remote server?",
+                    width=60
+                )
+                if code == self.d.DIALOG_OK:
+                    if not radius_installed:
+                        self.d.msgbox("privacyidea-radius is not installed on {}. Please install "
+                                      "privacyidea-radius.".format(self.peer.remote_ip), width=60)
+                        return
+                    self.peer.setup_freeradius()
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
