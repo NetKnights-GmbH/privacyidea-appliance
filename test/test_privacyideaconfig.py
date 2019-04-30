@@ -8,6 +8,11 @@ from authappliance.lib.appliance import PrivacyIDEAConfig
 class TestPIConfig(unittest.TestCase):
 
     def test_01_init(self):
+        # check parser
+        pic = PrivacyIDEAConfig(file="./test/testdata/pi.cfg")
+        self.assertEqual(pic.config.get("PI_AUDIT_SQL_TRUNCATE"), True)
+        self.assertEqual(pic.config.get("PI_AUDIT_POOL_SIZE"), 20)
+
         pic = PrivacyIDEAConfig(file="./test/testdata/pi.cfg", init=True)
 
         self.assertEqual(pic.config.get("PI_PEPPER"),
@@ -29,6 +34,8 @@ class TestPIConfig(unittest.TestCase):
                          "sfYF0kW6MsZmmg9dBlf5XMWE")
         self.assertEqual(pic.config.get("SQLALCHEMY_DATABASE_URI"),
                                         'mysql://pi:P4yvb3d1Thw_@localhost/pi')
+        self.assertEqual(pic.config.get("PI_LOGLEVEL"), "logging.DEBUG")
+        self.assertEqual(pic.config.get("SUPERUSER_REALM"), ['super'])
 
         # get keyfile
         r = pic.get_keyfile()
@@ -46,11 +53,29 @@ class TestPIConfig(unittest.TestCase):
         self.assertTrue("heros" in r)
         self.assertEqual(len(r), 2)
 
+        # set loglevel
+        pic.set_loglevel("logging.WARN")
+        with self.assertRaises(Exception):
+            pic.set_loglevel("123")
+
         pic.config["PI_ENCFILE"] = "./test/testdata/enckey"
         pic.config["PI_AUDIT_KEY_PRIVATE"] = "./test/testdata/private.pem"
         pic.config["PI_AUDIT_KEY_PUBLIC"] = "./test/testdata/public.pem"
+        pic.config["PI_AUDIT_SQL_TRUNCATE"] = False
+        pic.config["PI_AUDIT_POOL_SIZE"] = 21
+        pic.config["PI_ENGINE_REGISTRY_CLASS"] = "shared"
 
         pic.save()
+        # Check that values have been written correctly
+        with open("./test/testdata/pi.cfg", "r") as f:
+            contents = f.read()
+            self.assertIn("PI_ENCFILE = './test/testdata/enckey'", contents)
+            self.assertIn("PI_LOGLEVEL = logging.WARN", contents)
+            self.assertIn("SUPERUSER_REALM = ['super', 'heros']", contents)
+            self.assertIn("PI_AUDIT_SQL_TRUNCATE = False", contents)
+            self.assertIn("PI_AUDIT_POOL_SIZE = 21", contents)
+            self.assertIn("PI_ENGINE_REGISTRY_CLASS = 'shared'", contents)
+
         # Now we can create the files.
         pic.create_audit_keys()
         pic.create_encryption_key()
