@@ -19,7 +19,10 @@ from pwd import getpwnam
 
 import os
 import time
+
+import six
 import string
+from ast import literal_eval
 from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR
 import re
 import sys
@@ -262,12 +265,19 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
     def _content_to_config(self, content):
         self.config = {}
         for l in content.split("\n"):
-            if not l.startswith("import") and not l.startswith("#"):
-                try:
-                    k, v = l.split("=", 2)
-                    self.config[k.strip()] = v.strip().strip("'")
-                except Exception:
-                    pass
+            l = l.strip()
+            if l and not l.startswith("import") and not l.startswith("#"):
+                key, value = l.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if key == "PI_LOGLEVEL":
+                    # PI_LOGLEVEL should be one of logging.DEBUG, logging.INFO, logging.WARN, logging.ERROR,
+                    # so we store it as a string.
+                    parsed_value = value
+                else:
+                    # All other values should be literals.
+                    parsed_value = literal_eval(value)
+                self.config[key] = parsed_value
 
     def initialize(self):
         """
@@ -279,20 +289,22 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
     def save(self):
         with self.opener(self.file, 'wb') as f:
             f.write("import logging\n")
-            for k, v in self.config.items():
-                if k in ["PI_LOGLEVEL", "SUPERUSER_REALM"]:
-                    f.write("%s = %s\n" % (k, v))
+            for key, value in self.config.items():
+                if key == "PI_LOGLEVEL":
+                    # PI_LOGLEVEL should be one of "logging.DEBUG", "logging.INFO", "logging.WARN", "logging.ERROR".
+                    # Hence, we directly write its value to the pi.cfg file.
+                    value_repr = value
                 else:
-                    f.write("%s = '%s'\n" % (k, v))
+                    # For all other values, we write the string representation.
+                    value_repr = repr(value)
+                f.write("{0} = {1}\n".format(key, value_repr))
         print "Config file %s saved." % self.file
 
     def get_keyfile(self):
         return self.config.get("PI_ENCFILE")
 
     def get_superusers(self):
-        realm_string = self.config.get("SUPERUSER_REALM", "[]")
-        # convert the string to a list
-        return eval(realm_string)
+        return self.config.get("SUPERUSER_REALM", [])
 
     def set_superusers(self, realms):
         """
@@ -302,7 +314,7 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
         :type realms: list
         :return: None
         """
-        self.config["SUPERUSER_REALM"] = "%s" % realms
+        self.config["SUPERUSER_REALM"] = realms
 
     def get_loglevel(self):
         return self.config.get("PI_LOGLEVEL")
