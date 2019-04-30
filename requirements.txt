@@ -1,5 +1,4 @@
 argparse==1.2.1
-dbus-python==1.2.4
 funcsigs==1.0.2
 paramiko==1.16.0
 pyparsing==2.0.3
