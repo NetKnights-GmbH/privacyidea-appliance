@@ -542,13 +542,17 @@ class Peer(object):
 
         self.add_info("Setup my.cnf on local server...")
 
-        for key, value in list(shared_my_cnf_values.items()) + list(local_my_cnf_values.items()):
+        conf_values = shared_my_cnf_values.copy()
+        conf_values.update(local_my_cnf_values)
+        for key, value in conf_values:
             self.dbConfig.set('mysqld', key, value)
 
         self.add_info("Setup my.cnf on remote server...")
 
         remote_my_cnf = RemoteMySQLConfig(sftp)
-        for key, value in list(shared_my_cnf_values.items()) + list(remote_my_cnf_values.items()):
+        conf_values = shared_my_cnf_values.copy()
+        conf_values.update(remote_my_cnf_values)
+        for key, value in conf_values:
             remote_my_cnf.set('mysqld', key, value)
 
         sftp.close()
@@ -1196,7 +1200,7 @@ Backup failed:
         while 1:
             backups = self.Backup.get_backups()
             choices = []
-            for bfile in sorted(list(backups.keys()), reverse=True):
+            for bfile in sorted(backups.keys(), reverse=True):
                 choices.append((bfile, "%s %s" % (backups[bfile].get("size"),
                                                   backups[bfile].get("time"))))
             if len(choices) == 0:
@@ -1257,7 +1261,7 @@ class RadiusMenu(object):
         while 1:
             clients = [("Add new client", "Add a new RADIUS client")]
             clients_from_file = self.RadiusConfig.clients_get()
-            for client, v in list(clients_from_file.items()):
+            for client, v in clients_from_file.items():
                 clients.append((client, "%s/%s (%s)" % (v.get("ipaddr"),
                                                         v.get("netmask"),
                                                         v.get("shortname"))))
