@@ -177,8 +177,6 @@ class WebserverMenu(object):
 class Peer(object):
     files = ["/etc/privacyidea/enckey", "/etc/privacyidea/logging.cfg",
              "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
-    freeradius_files = ["/etc/privacyidea/rlm_perl.ini",
-                        "/etc/freeradius/clients.conf"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
                  password=None, local_ip=None):
@@ -504,10 +502,22 @@ class Peer(object):
 
     def setup_freeradius(self):
         """
-        Copy /etc/freeradius/clients.conf and /etc/privacyidea/rlm_perl.ini to the remote
-        peer and restart the freeradius daemon.
+        Copy FreeRADIUS configuration to the remote peer and restart the freeradius daemon.
         """
         self.info = ""
+        # Collect all local FreeRADIUS config files that should be copied.
+        # This includes /etc/privacyidea/rlm_perl.ini
+        # but excludes /etc/freeradius/certs (because it contains private keys)
+        # and /etc/freeradius/sites-enabled (because it contains symlinks)
+        config_files = ["/etc/privacyidea/rlm_perl.ini"]
+        config_directories = ["/etc/freeradius/",
+                              "/etc/freeradius/modules",
+                              "/etc/freeradius/sites-available"]
+        for directory in config_directories:
+            for filename in os.listdir(directory):
+                absolute_filename = os.path.join(directory, filename)
+                if os.path.isfile(absolute_filename):
+                    config_files.append(absolute_filename)
         self.add_info("copying FreeRADIUS configuration:")
         # create SSH and SFTP client to remote server
         ssh = SSHClient()
@@ -516,10 +526,27 @@ class Peer(object):
         sftp = ssh.open_sftp()
 
         # Copy configuration files to remote server
-        for file in self.freeradius_files:
-            if os.path.exists(file):
-                self.add_info(file)
-                sftp.put(file, file)
+        for filename in config_files:
+            if os.path.exists(filename):
+                self.add_info(filename)
+                sftp.put(filename, filename)
+        self.add_info("")
+        # Transfer enabled/disabled sites
+        local_enabled_sites = set(os.listdir("/etc/freeradius/sites-enabled/"))
+        remote_enabled_sites = set(sftp.listdir("/etc/freeradius/sites-enabled/"))
+        # Remotely disable sites that are not enabled locally
+        for site in remote_enabled_sites:
+            if site not in local_enabled_sites:
+                self.add_info("Remotely disabling site {!s} ...".format(site))
+                site_filename = os.path.join("/etc/freeradius/sites-enabled", site)
+                sftp.unlink(site_filename)
+        # Enable locally enabled sites that are not already enabled remotely
+        for site in local_enabled_sites:
+            if site not in remote_enabled_sites:
+                self.add_info("Remotely enabling site {!s} ...".format(site))
+                available_filename = os.path.join("/etc/freeradius/sites-available", site)
+                enabled_filename = os.path.join("/etc/freeradius/sites-enabled", site)
+                sftp.symlink(available_filename, enabled_filename)
         self.add_info("")
         self.add_info("Restarting remote FreeRADIUS server ...")
         execute_ssh_command_and_wait(ssh, "service freeradius restart")
