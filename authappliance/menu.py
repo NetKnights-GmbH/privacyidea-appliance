@@ -51,7 +51,7 @@ from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
 from authappliance.lib.tincparser.tincparser import (TincConfFile, LocalIOHandler,
                                                      SFTPIOHandler, UpScript, NetsBoot)
 from authappliance.lib.updates import Updates, UPDATE_UPDATES, UPDATE_SECURITY
-from authappliance.lib.utils import execute_ssh_command_and_wait
+from authappliance.lib.utils import execute_ssh_command_and_wait, to_unicode
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -499,7 +499,7 @@ class Peer(object):
         self.display_messages()
 
     def display_messages(self):
-        self.d.scrollbox(self.info, height=20, width=60)
+        self.d.scrollbox(to_unicode(self.info), height=20, width=60)
 
     def setup_redundancy(self):
         #
@@ -544,7 +544,7 @@ class Peer(object):
 
         conf_values = shared_my_cnf_values.copy()
         conf_values.update(local_my_cnf_values)
-        for key, value in conf_values:
+        for key, value in conf_values.items():
             self.dbConfig.set('mysqld', key, value)
 
         self.add_info("Setup my.cnf on remote server...")
@@ -552,7 +552,7 @@ class Peer(object):
         remote_my_cnf = RemoteMySQLConfig(sftp)
         conf_values = shared_my_cnf_values.copy()
         conf_values.update(remote_my_cnf_values)
-        for key, value in conf_values:
+        for key, value in conf_values.items():
             remote_my_cnf.set('mysqld', key, value)
 
         sftp.close()

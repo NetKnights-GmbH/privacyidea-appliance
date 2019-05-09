@@ -95,16 +95,14 @@ def _load_config(filename):
 
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
+        self.config = configobj.ConfigObj()
         self.filename = filename
         self.reset()
         self.autosave_enabled = True
-        self.config = None
 
     def reset(self):
         if self.exists:
             self.config = _load_config(self.filename)  # TODO: This exits if config is malformed!
-        else:
-            self.config = configobj.ConfigObj()
 
     @property
     def initialized(self):

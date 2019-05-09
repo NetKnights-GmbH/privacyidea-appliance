@@ -20,7 +20,6 @@ from pwd import getpwnam
 import os
 import time
 
-import six
 import string
 from ast import literal_eval
 from stat import ST_SIZE, ST_MTIME, S_IWUSR, S_IRUSR

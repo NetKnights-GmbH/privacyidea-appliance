@@ -17,6 +17,7 @@
 # License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import select
+import six
 
 
 def execute_ssh_command_and_wait(ssh, command, timeout=1.):
@@ -52,3 +53,22 @@ def execute_ssh_command_and_wait(ssh, command, timeout=1.):
     stderr_file.close()
     exit_status = stdout_file.channel.recv_exit_status()
     return exit_status, ''.join(stdout_data), ''.join(stderr_data)
+
+
+def to_unicode(s, encoding="utf-8"):
+    """
+    Converts the string s to unicode if it is of type bytes.
+
+    :param s: the string to convert
+    :type s: bytes or str
+    :param encoding: the encoding to use (default utf8)
+    :type encoding: str
+    :return: unicode string
+    :rtype: str
+    """
+    if isinstance(s, six.text_type):
+        return s
+    elif isinstance(s, bytes):
+        return s.decode(encoding)
+    # TODO: warning? Exception?
+    return s

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-#VERSION = "1.5dev9"
 from __future__ import print_function
+
 VERSION = "2.1dev1"
 from setuptools import setup, find_packages
 import os
@@ -34,7 +34,7 @@ setup(
                       'python2-pythondialog;python_version<"3.0"',
                       'dbus-python',
                       'netaddr',
-                      'paramiko',
+                      'paramiko>=1.17.6',
                       'pyparsing',
                       'six'
                       ],
