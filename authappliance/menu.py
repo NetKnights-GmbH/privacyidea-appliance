@@ -871,7 +871,7 @@ class DBMenu(object):
                     "the remote server?",
                     width=60
                 )
-                if code == self.d.DIALOG_OK:
+                if code == self.d.OK:
                     if not radius_installed:
                         self.d.msgbox("privacyidea-radius is not installed on {}. Please install "
                                       "privacyidea-radius.".format(self.peer.remote_ip), width=60)
