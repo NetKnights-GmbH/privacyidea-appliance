@@ -32,9 +32,8 @@ setup(
     url='http://www.privacyidea.org',
     install_requires=['pythondialog;python_version>="3.0"',
                       'python2-pythondialog;python_version<"3.0"',
-                      'dbus-python',
                       'netaddr',
-                      'paramiko>=1.17.6',
+                      'paramiko>=2.4.2',
                       'pyparsing',
                       'six'
                       ],
