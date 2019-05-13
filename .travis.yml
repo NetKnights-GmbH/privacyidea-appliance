@@ -1,0 +1,32 @@
+dist: xenial
+
+language: python
+
+sudo: false
+
+addons:
+  apt:
+    update: true
+    packages:
+      - dialog
+      - libdbus-1-dev
+
+python:
+  - "2.7"
+  - "3.6"
+
+# command to install dependencies
+install:
+  - "pip install ."
+  - "pip install privacyidea"
+  - "pip install pytest"
+  - "pip install pytest-cov"
+  - "pip install funcsigs"
+  - "pip install mock"
+  - "pip install coveralls"
+
+# command to run tests
+script: "python -b -m pytest --cov=authappliance ./test"
+
+after_success:
+    coveralls --rcfile=coveragerc

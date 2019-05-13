@@ -72,12 +72,14 @@ strategy = string
 strategy = string
 """
 
+
 def extract_from_endpoint(endpoint, attribute):
-    match = re.search(attribute + '=([^:]+)', endpoint)
+    match = re.search(attribute + r'=([^:]+)', endpoint)
     if match is not None:
         return match.group(1)
     else:
         return ''
+
 
 def _load_config(filename):
     with open(filename, 'r') as f:
@@ -85,13 +87,15 @@ def _load_config(filename):
 
     validator = validate.Validator()
     result = config.validate(validator, preserve_errors=True)
-    if result != True:
+    if not result:
         print('Invalid LDAP Proxy configuration at {!r}: {!r}'.format(filename, result))
         sys.exit(1)
     return config
 
+
 class LDAPProxyConfig(object):
     def __init__(self, filename=LDAP_PROXY_CONFIG_FILE):
+        self.config = configobj.ConfigObj()
         self.filename = filename
         self.reset()
         self.autosave_enabled = True
@@ -99,13 +103,11 @@ class LDAPProxyConfig(object):
     def reset(self):
         if self.exists:
             self.config = _load_config(self.filename)  # TODO: This exits if config is malformed!
-        else:
-            self.config = configobj.ConfigObj()
 
     @property
     def initialized(self):
         if self.exists:
-            self.reset() # ?
+            self.reset()  # ?
             protocol, host, port = self.backend_settings
             if host == '192.0.2.1':
                 # this host is used in the default config shipped with the ldap-proxy ubuntu package
@@ -124,11 +126,12 @@ class LDAPProxyConfig(object):
         self.config['bind-cache'] = {'enabled': False}
         self.config['app-cache'] = {'enabled': False}
         self.config.setdefault('ldap-backend', {})['use-tls'] = False
-        self.config.setdefault('ldap-backend', {})['test-connection'] = False # TODO
+        self.config.setdefault('ldap-backend', {})['test-connection'] = False
         privacyidea_cert, _ = ApacheConfig().get_certificates()
         self.config['privacyidea'] = {
-            'instance': 'https://{}'.format(socket.getfqdn()), # TODO: should probably use the hostname from the cert?
-                                                               # Or disable validation entirely?
+            # TODO: should probably use the hostname from the cert?
+            #  Or disable validation entirely?
+            'instance': 'https://{}'.format(socket.getfqdn()),
             'certificate': privacyidea_cert,
         }
         self.autosave()
@@ -273,6 +276,7 @@ class LDAPProxyConfig(object):
         ldap_proxy_settings['bind-service-account'] = bind_service_account
         self.autosave()
 
+
 class LDAPProxyService(object):
     def __init__(self):
         pass
@@ -295,16 +299,18 @@ class LDAPProxyService(object):
         state = self._get_systemd_property('ActiveState')
         return state in ('active', 'reloading', 'activating')
 
-    def _invoke_systemctl(self, arguments):
+    @staticmethod
+    def _invoke_systemctl(arguments):
         proc = subprocess.Popen(['systemctl'] + arguments,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         return proc.wait() == 0
 
-    def _get_systemd_property(self, property_name):
+    @staticmethod
+    def _get_systemd_property(property_name):
         """
-        Invoke ``systemctl show`` to retrieve the value of the given property of the LDAP proxy unit file.
-        Return it as a string.
+        Invoke ``systemctl show`` to retrieve the value of the given property
+        of the LDAP proxy unit file. Return it as a string.
         """
         proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
                                 stdout=subprocess.PIPE)
@@ -317,4 +323,3 @@ class LDAPProxyService(object):
 
     def stop(self):
         return self._invoke_systemctl(['stop', LDAP_PROXY_UNIT_FILE])
-

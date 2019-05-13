@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import unittest
-
 import dialog
-
+import os
+from shutil import copyfile
 from authappliance.menu import MainMenu
-from mockdialog import Handler, UserBehavior
+from .mockdialog import Handler, UserBehavior
+
+TEST_CONFIG = './test/testdata/pi.cfg'
+TMP_CONFIG = './test/testdata/tmp_pi.cfg'
 
 
 class EscapeHandler(Handler):
@@ -24,6 +29,7 @@ class EscapeHandler(Handler):
                     'Unexpected yesno dialog: {!r}'.format(kwds['text'])
             return dialog.Dialog.OK
 
+
 class ApplianceBehavior(UserBehavior):
     def navigate(self, *choices):
         """
@@ -38,7 +44,14 @@ class ApplianceBehavior(UserBehavior):
         for choice in choices:
             self.answer_menu(choice)
 
+
 class MenuTestCase(unittest.TestCase):
+    def setUp(self):
+        copyfile(TEST_CONFIG, TMP_CONFIG)
+
+    def tearDown(self):
+        os.unlink(TMP_CONFIG)
+
     def simulate_run(self, behavior, config_file=None):
         behavior.add_handler(EscapeHandler(behavior))
         with behavior.simulate():

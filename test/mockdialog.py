@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import re
 from contextlib import contextmanager
 from functools import partial
@@ -12,6 +14,7 @@ PATCH_FUNCTIONS = ('yesno', 'menu', 'radiolist', 'inputbox', 'passwordbox')
 PATCH_FUNCTION_SIGNATURES = dict((function, funcsigs.signature(getattr(dialog.Dialog, function)))
                                  for function in PATCH_FUNCTIONS)
 
+
 class Handler(object):
     """
     Callable object that handles the invocation of a mock dialog function.
@@ -23,6 +26,7 @@ class Handler(object):
         :return: value that should be returned to the caller
         """
         raise NotImplementedError()
+
 
 class ActionHandler(Handler):
     """
@@ -66,6 +70,7 @@ class ActionHandler(Handler):
         self._checkers.extend(checkers)
         return self
 
+
 def text_matches(pattern):
     """
     Check that the displayed dialog text matches the regular expression ``pattern``.
@@ -77,13 +82,14 @@ def text_matches(pattern):
             "Provided text does not match {!r} ({!r})".format(pattern, kwds['text'])
     return text_matches_checker
 
+
 def preselected(tag_pattern):
     """
     Only applicable for radiolist dialogs:
     Check that
      * there is a preselected item
      * its tag matches the regular expression ``pattern``.
-    :param pattern: regular expression that matches anywhere in the string
+    :param tag_pattern: regular expression that matches anywhere in the string
     """
     def preselected_checker(kwds):
         for choice in kwds['choices']:
@@ -97,16 +103,19 @@ def preselected(tag_pattern):
             assert False, "No item was preselected!"
     return preselected_checker
 
+
 def initial(pattern):
     """
-    Only applicable for inputbox dialogs: Check that the initially given text matches the pattern ``text``
-    :param text: regular expression that matches anywhere in the string
+    Only applicable for inputbox dialogs: Check that the initially given text
+    matches the pattern ``text``
+    :param pattern: regular expression that matches anywhere in the string
     """
     def initial_checker(kwds):
         init = kwds.get('init', '')
         assert re.search(pattern, init) is not None,\
             "Initial text does not match {!r} ({!r})".format(pattern, init)
     return initial_checker
+
 
 def _match_choices(answer, choices):
     matching_tags = []
@@ -115,8 +124,10 @@ def _match_choices(answer, choices):
         if re.search(answer, tag) is not None:
             matching_tags.append(tag)
     assert matching_tags, "No choice matching {!r} found!".format(answer)
-    assert len(matching_tags) == 1, "Ambiguous answer: {!r} (matches {!r})".format(answer, matching_tags)
+    assert len(matching_tags) == 1, "Ambiguous answer: {!r} (matches {!r})".format(answer,
+                                                                                   matching_tags)
     return matching_tags[0]
+
 
 class UserBehavior(object):
     """
@@ -124,7 +135,8 @@ class UserBehavior(object):
     You will probably only need the ``answer_*`` and ``simulate`` methods.
     """
     def __init__(self):
-        #: A queue of handlers. Every time a dialog is displayed, the handler at the front of the list is invoked.
+        #: A queue of handlers. Every time a dialog is displayed, the handler
+        # at the front of the list is invoked.
         self._handlers = []
 
     def add_handler(self, handler):

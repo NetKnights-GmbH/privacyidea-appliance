@@ -25,6 +25,7 @@ UPDATE_COMMAND = "/usr/bin/pi-appliance-update"
 UPDATE_SECURITY = 'security'
 UPDATE_UPDATES = 'updates'
 
+
 def parse_update_options(command):
     """
     Given a pi-appliance-update command, parse its options and return a dictionary.
@@ -46,6 +47,7 @@ def parse_update_options(command):
         options['-t'] = UPDATE_SECURITY
     return options
 
+
 class Updates(object):
     def __init__(self):
         self.cp = CronJobParser()
@@ -58,7 +60,8 @@ class Updates(object):
 
     def get_update_cronjobs(self):
         """
-        :return: yield all update cronjobs found by the cronjob parser as list (CronJob object, options dict)
+        :return: yield all update cronjobs found by the cronjob parser
+                 as list (CronJob object, options dict)
         """
         for cronjob in self.cp.cronjobs:
             if cronjob.command.startswith(UPDATE_COMMAND):
