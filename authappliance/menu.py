@@ -21,13 +21,15 @@ from __future__ import print_function
 import locale
 import argparse
 import sys
+import platform
 import os
 from traceback import print_exc
 
 # If the ``privacyidea`` Python package cannot be imported normally,
 # append the virtualenv site-packages of the privacyIDEA 3.x distribution
 # packages to the search path and try again.
-PRIVACYIDEA_SITE_PACKAGES = '/opt/privacyidea/lib/python2.7/site-packages/'
+site_version = 'python' + '.'.join(platform.python_version_tuple()[0:2])
+PRIVACYIDEA_SITE_PACKAGES = '/opt/privacyidea/lib/' + site_version + '/site-packages/'
 try:
     import privacyidea
 except ImportError:
