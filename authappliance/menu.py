@@ -17,10 +17,30 @@
 """
 text dialog based setup tool to configure the privacyIDEA basics.
 """
-
+from __future__ import print_function
 import locale
 import argparse
 import sys
+import os
+from traceback import print_exc
+
+# If the ``privacyidea`` Python package cannot be imported normally,
+# append the virtualenv site-packages of the privacyIDEA 3.x distribution
+# packages to the search path and try again.
+PRIVACYIDEA_SITE_PACKAGES = '/opt/privacyidea/lib/python2.7/site-packages/'
+try:
+    import privacyidea
+except ImportError:
+    if os.path.isdir(PRIVACYIDEA_SITE_PACKAGES):
+        sys.path.append(PRIVACYIDEA_SITE_PACKAGES)
+    try:
+        import privacyidea
+    except ImportError:
+        print('The privacyidea module cannot be found in the search path: {!r}'.format(sys.path), file=sys.stderr)
+        print_exc(file=sys.stderr)
+        print('Exiting.', file=sys.stderr)
+        sys.exit(1)
+
 import time
 from functools import partial
 
