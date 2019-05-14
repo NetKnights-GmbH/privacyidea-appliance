@@ -3,9 +3,9 @@ bcrypt==3.1.6
 cffi==1.12.3
 configobj==5.0.6
 cryptography==2.6.1
-enum34==1.1.6
+enum34==1.1.6; python_version < '3.0'
 funcsigs==1.0.2
-ipaddress==1.0.22
+ipaddress==1.0.22; python_version < '3.0'
 netaddr==0.7.19
 paramiko==2.4.2
 pbr==5.2.0
