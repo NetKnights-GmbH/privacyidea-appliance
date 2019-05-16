@@ -35,7 +35,8 @@ setup(
                       'netaddr',
                       'paramiko>=2.4.2',
                       'pyparsing',
-                      'six'
+                      'six',
+                      'configobj'
                       ],
     scripts=['authappliance/pi-appliance',
              'tools/pi-appliance-update'],
