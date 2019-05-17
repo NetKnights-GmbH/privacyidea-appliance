@@ -9,7 +9,6 @@ addons:
     update: true
     packages:
       - dialog
-      - libdbus-1-dev
 
 python:
   - "2.7"
