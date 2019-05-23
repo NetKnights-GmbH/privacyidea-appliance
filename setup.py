@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-VERSION = "2.1dev1"
+VERSION = "3.0"
 from setuptools import setup, find_packages
 import os
 import sys
