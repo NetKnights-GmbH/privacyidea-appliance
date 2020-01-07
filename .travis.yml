@@ -1,9 +1,7 @@
-dist: xenial
-
 language: python
-
 sudo: false
 
+# we need the "dialog" package
 addons:
   apt:
     update: true
@@ -11,21 +9,16 @@ addons:
       - dialog
 
 python:
-  - "2.7"
-  - "3.6"
+  - 2.7
+  - 3.6
 
 # command to install dependencies
 install:
-  - "pip install ."
-  - "pip install privacyidea"
-  - "pip install pytest"
-  - "pip install pytest-cov"
-  - "pip install funcsigs"
-  - "pip install mock"
+  - "pip install tox-travis"
   - "pip install coveralls"
 
 # command to run tests
-script: "python -b -m pytest --cov=authappliance ./test"
+script: "tox"
 
 after_success:
     coveralls --rcfile=coveragerc

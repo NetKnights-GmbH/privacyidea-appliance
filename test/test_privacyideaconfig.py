@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import unittest
+import os
+from shutil import copyfile
 from authappliance.lib.appliance import PrivacyIDEAConfig
 from .testutil import TEST_CONFIG, TMP_CONFIG
 
 
 class TestPIConfig(unittest.TestCase):
+    def setUp(self):
+        copyfile(TEST_CONFIG, TMP_CONFIG)
+
+    def tearDown(self):
+        os.unlink(TMP_CONFIG)
 
     def test_01_init(self):
         # check parser
