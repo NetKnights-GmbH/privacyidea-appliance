@@ -2109,6 +2109,7 @@ def create_arguments():
 
 def main():
     locale.setlocale(locale.LC_ALL, '')
+    os.environ['NCURSES_NO_UTF8_ACS'] = '1'
     args = create_arguments()
     pS = MainMenu(config=args.file)
     pS.main_menu()
