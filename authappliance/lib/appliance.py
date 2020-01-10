@@ -381,13 +381,19 @@ class FreeRADIUSConfig(object):
         Clients are always kept persistent on the file system
         :param client: clients.conf file.
         '''
-        # clients
-        self.config_file = client
-        self.ccp = ClientConfParser(infile=client)
-        self.config_path = os.path.dirname(client)
-        self.dir_enabled = self.config_path + "/sites-enabled"
-        self.dir_available = self.config_path + "/sites-available"
-        
+        # check if the clients.conf file exists and is readable
+        client3 = "/etc/freeradius/3.0/clients.conf"
+        if os.access(client, os.F_OK | os.R_OK | os.W_OK):
+            self.config_file = client
+        elif os.access(client3, os.F_OK | os.R_OK | os.W_OK):
+            self.config_file = client3
+        else:
+            raise FileNotFoundError()
+        self.ccp = ClientConfParser(infile=self.config_file)
+        self.config_path = os.path.dirname(self.config_file)
+        self.dir_enabled = os.path.join(self.config_path,  "sites-enabled")
+        self.dir_available = os.path.join(self.config_path, "sites-available")
+
     def clients_get(self):
         clients = self.ccp.get_dict()
         return clients
