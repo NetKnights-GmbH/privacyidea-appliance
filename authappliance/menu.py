@@ -307,7 +307,7 @@ class Peer(object):
 
     def _execute_local_sql(self, sql):
         p = Popen(['mysql', '--defaults-extra-file=/etc/mysql/debian.cnf'],
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
         output, err = p.communicate(sql)
         if err:
             self.add_info("====== ERROR =======")
@@ -370,8 +370,8 @@ class Peer(object):
         generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
 
         # Generate local keypair
-        proc = Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = proc.communicate('\n\n') # press <RETURN> two times
+        proc = Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
+        stdout, stderr = proc.communicate('\n\n')  # press <RETURN> two times
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
             self.add_info(stderr)
@@ -447,7 +447,7 @@ class Peer(object):
         # Start the tinc nets
         start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
         # locally
-        proc = Popen(start_command, shell=True, stderr=PIPE)
+        proc = Popen(start_command, shell=True, stderr=PIPE, encoding='utf8')
         stdout, stderr = proc.communicate()
         if proc.wait() != 0:
             self.add_info('ERROR: Could not bring up the tinc VPN locally')
@@ -466,7 +466,7 @@ class Peer(object):
         # Try to ping LOCAL -> REMOTE
         # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
         ping_command = 'ping -c 10 {}'
-        proc = Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
+        proc = Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True, encoding='utf8')
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
             self.add_info('ERROR: Could not ping remote host from local host')
@@ -503,7 +503,7 @@ class Peer(object):
         """ Stop and delete the tinc network """
         self.info = ""
         # Shutdown, ignore the return value
-        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True, stderr=PIPE)
+        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True, stderr=PIPE, encoding='utf8')
         proc.communicate()
         self.add_info('tincd for {} has been shut down.'.format(vpn_name))
 
@@ -685,7 +685,7 @@ class Peer(object):
         dumpfile = NamedTemporaryFile(mode="w", delete=False)
         p = Popen(["mysqldump", "--defaults-extra-file=/etc/mysql/debian.cnf", "--databases", "pi"],
                   # TODO: Need explicit password here?
-                  stdout=dumpfile, stderr=PIPE)
+                  stdout=dumpfile, stderr=PIPE, encoding='utf8')
         output, err = p.communicate()
         r = p.wait()
         if r == 0:

@@ -313,7 +313,7 @@ class LDAPProxyService(object):
         of the LDAP proxy unit file. Return it as a string.
         """
         proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
-                                stdout=subprocess.PIPE)
+                                stdout=subprocess.PIPE, encoding='utf8')
         output = proc.communicate()[0].strip()
         return output.split("=", 1)[1]
 
