@@ -312,8 +312,12 @@ class LDAPProxyService(object):
         Invoke ``systemctl show`` to retrieve the value of the given property
         of the LDAP proxy unit file. Return it as a string.
         """
-        proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
-                                stdout=subprocess.PIPE, encoding='utf8')
+        try:
+            proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
+                                    stdout=subprocess.PIPE, encoding='utf8')
+        except TypeError:
+            proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
+                                    stdout=subprocess.PIPE)
         output = proc.communicate()[0].strip()
         return output.split("=", 1)[1]
 
