@@ -85,7 +85,7 @@ VERSION = "2.0"
 services_for_restart = set()
 
 
-def my_Popen(command, stdin=None, stdout=None, stderr=None, shell=False, cwd=None, encoding=None):
+def my_Popen(command, stdin=None, stdout=None, stderr=None, shell=False, cwd=None, encoding='utf8'):
     try:
         p = Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell, cwd=cwd, encoding=encoding)
     except TypeError:
@@ -315,7 +315,7 @@ class Peer(object):
 
     def _execute_local_sql(self, sql):
         p = my_Popen(['mysql', '--defaults-extra-file=/etc/mysql/debian.cnf'],
-                     stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
+                     stdin=PIPE, stdout=PIPE, stderr=PIPE)
         output, err = p.communicate(sql)
         if err:
             self.add_info("====== ERROR =======")
@@ -378,7 +378,7 @@ class Peer(object):
         generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
 
         # Generate local keypair
-        proc = my_Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
+        proc = my_Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = proc.communicate('\n\n')  # press <RETURN> two times
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
@@ -455,7 +455,7 @@ class Peer(object):
         # Start the tinc nets
         start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
         # locally
-        proc = my_Popen(start_command, shell=True, stderr=PIPE, encoding='utf8')
+        proc = my_Popen(start_command, shell=True, stderr=PIPE)
         stdout, stderr = proc.communicate()
         if proc.wait() != 0:
             self.add_info('ERROR: Could not bring up the tinc VPN locally')
@@ -474,7 +474,7 @@ class Peer(object):
         # Try to ping LOCAL -> REMOTE
         # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
         ping_command = 'ping -c 10 {}'
-        proc = my_Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True, encoding='utf8')
+        proc = my_Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
             self.add_info('ERROR: Could not ping remote host from local host')
