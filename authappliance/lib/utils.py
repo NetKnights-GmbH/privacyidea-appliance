@@ -42,17 +42,18 @@ def execute_ssh_command_and_wait(ssh, command, timeout=1.):
         to_read, _, _ = select.select([channel], [], [], timeout)
         if to_read:
             if channel.recv_ready():
-                stdout_data.append(channel.recv(len(channel.in_buffer)))
+                stdout_data.append(channel.recv(len(channel.in_buffer)).decode())
             if channel.recv_stderr_ready():
-                stderr_data.append(channel.recv(len(channel.in_buffer)))
-        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+                stderr_data.append(channel.recv(len(channel.in_buffer)).decode())
+        if channel.exit_status_ready() and not channel.recv_ready() \
+                and not channel.recv_stderr_ready():
             channel.shutdown_read()
             channel.close()
             break
     stdout_file.close()
     stderr_file.close()
     exit_status = stdout_file.channel.recv_exit_status()
-    return exit_status, ''.join(stdout_data), ''.join(stderr_data)
+    return exit_status, u''.join(stdout_data), u''.join(stderr_data)
 
 
 def to_unicode(s, encoding="utf-8"):

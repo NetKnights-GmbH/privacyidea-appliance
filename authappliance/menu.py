@@ -38,7 +38,8 @@ except ImportError:
     try:
         import privacyidea
     except ImportError:
-        print('The privacyidea module cannot be found in the search path: {!r}'.format(sys.path), file=sys.stderr)
+        print('The privacyidea module cannot be found in the search '
+              'path: {!r}'.format(sys.path), file=sys.stderr)
         print_exc(file=sys.stderr)
         print('Exiting.', file=sys.stderr)
         sys.exit(1)
@@ -71,9 +72,10 @@ from tempfile import NamedTemporaryFile
 from authappliance.lib.extdialog import ExtDialog
 from authappliance.lib.ldap_proxy import LDAPProxyConfig, LDAPProxyService
 from authappliance.lib.tincparser.tincparser import (TincConfFile, LocalIOHandler,
-                                                     SFTPIOHandler, UpScript, NetsBoot)
+                                                     SFTPIOHandler, UpScript,
+                                                     NetsBoot)
 from authappliance.lib.updates import Updates, UPDATE_UPDATES, UPDATE_SECURITY
-from authappliance.lib.utils import execute_ssh_command_and_wait, to_unicode
+from authappliance.lib.utils import (execute_ssh_command_and_wait, to_unicode)
 
 DESCRIPTION = __doc__
 VERSION = "2.0"
@@ -83,14 +85,6 @@ VERSION = "2.0"
 #: using mark_service_for_restart and
 #: reset_services_for_restart.
 services_for_restart = set()
-
-
-def my_Popen(command, stdin=None, stdout=None, stderr=None, shell=False, cwd=None, encoding='utf8'):
-    try:
-        p = Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell, cwd=cwd, encoding=encoding)
-    except TypeError:
-        p = Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, shell=shell, cwd=cwd)
-    return p
 
 
 def mark_service_for_restart(service):
@@ -314,15 +308,16 @@ class Peer(object):
         self.display_messages()
 
     def _execute_local_sql(self, sql):
-        p = my_Popen(['mysql', '--defaults-extra-file=/etc/mysql/debian.cnf'],
-                     stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        p = Popen(['mysql', '--defaults-extra-file=/etc/mysql/debian.cnf'],
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True)
         output, err = p.communicate(sql)
         if err:
             self.add_info("====== ERROR =======")
             self.add_info(err)
         return output, err
 
-    def _escape_for_shell(self, argument):
+    @staticmethod
+    def _escape_for_shell(argument):
         return "'{}'".format(argument.replace("'", r"'\''"))
 
     def _execute_remote_sql(self, sql):
@@ -378,7 +373,8 @@ class Peer(object):
         generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
 
         # Generate local keypair
-        proc = my_Popen(generate_key_command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        proc = Popen(generate_key_command, shell=True, stdout=PIPE,
+                     stderr=PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate('\n\n')  # press <RETURN> two times
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
@@ -455,7 +451,8 @@ class Peer(object):
         # Start the tinc nets
         start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
         # locally
-        proc = my_Popen(start_command, shell=True, stderr=PIPE)
+        proc = Popen(start_command, shell=True, stdout=PIPE, stderr=PIPE,
+                     universal_newlines=True)
         stdout, stderr = proc.communicate()
         if proc.wait() != 0:
             self.add_info('ERROR: Could not bring up the tinc VPN locally')
@@ -474,7 +471,8 @@ class Peer(object):
         # Try to ping LOCAL -> REMOTE
         # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
         ping_command = 'ping -c 10 {}'
-        proc = my_Popen(ping_command.format(remote_vpn_ip), stdout=PIPE, shell=True)
+        proc = Popen(ping_command.format(remote_vpn_ip), shell=True,
+                     stdout=PIPE, stderr=PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
             self.add_info('ERROR: Could not ping remote host from local host')
@@ -500,7 +498,8 @@ class Peer(object):
 
     @staticmethod
     def is_tinc_configured(vpn_name='privacyideaVPN'):
-        """ Return true if /etc/tinc/privacyideaVPN exists and /etc/tinc/nets.boot contains the VPN name """
+        """ Return true if /etc/tinc/privacyideaVPN exists and
+        /etc/tinc/nets.boot contains the VPN name """
         if os.path.exists(os.path.join('/etc/tinc', vpn_name)):
             nets_boot = NetsBoot(LocalIOHandler(), '/etc/tinc/nets.boot')
             if vpn_name in nets_boot.nets:
@@ -511,7 +510,7 @@ class Peer(object):
         """ Stop and delete the tinc network """
         self.info = ""
         # Shutdown, ignore the return value
-        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True, stderr=PIPE, encoding='utf8')
+        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True)
         proc.communicate()
         self.add_info('tincd for {} has been shut down.'.format(vpn_name))
 
@@ -691,9 +690,9 @@ class Peer(object):
         self.add_info("Dumping and copying the existing database...")
 
         dumpfile = NamedTemporaryFile(mode="w", delete=False)
-        p = Popen(["mysqldump", "--defaults-extra-file=/etc/mysql/debian.cnf", "--databases", "pi"],
-                  # TODO: Need explicit password here?
-                  stdout=dumpfile, stderr=PIPE, encoding='utf8')
+        p = Popen(["mysqldump", "--defaults-extra-file=/etc/mysql/debian.cnf",
+                   "--databases", "pi"],
+                  stdout=dumpfile, stderr=PIPE, universal_newlines=True)
         output, err = p.communicate()
         r = p.wait()
         if r == 0:
