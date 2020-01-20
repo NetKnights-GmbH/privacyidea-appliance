@@ -27,7 +27,7 @@ class TestPIConfig(unittest.TestCase):
         self.assertEqual(pic.config.get("SECRET_KEY"),
                          "sfYF0kW6MsZmmg9dBlf5XMWE")
         self.assertEqual(pic.config.get("SQLALCHEMY_DATABASE_URI"),
-                         'mysql://pi:P4yvb3d1Thw_@localhost/pi')
+                         'mysql+pymysql://pi:P4yvb3d1Thw_@localhost/pi')
 
         # save the config
         pic.save()
@@ -40,7 +40,7 @@ class TestPIConfig(unittest.TestCase):
         self.assertEqual(pic.config.get("SECRET_KEY"),
                          "sfYF0kW6MsZmmg9dBlf5XMWE")
         self.assertEqual(pic.config.get("SQLALCHEMY_DATABASE_URI"),
-                         'mysql://pi:P4yvb3d1Thw_@localhost/pi')
+                         'mysql+pymysql://pi:P4yvb3d1Thw_@localhost/pi')
         self.assertEqual(pic.config.get("PI_LOGLEVEL"), "logging.DEBUG")
         self.assertEqual(pic.config.get("SUPERUSER_REALM"), ['super'])
 

@@ -30,6 +30,7 @@ import random
 from authappliance.lib.mysqlparser import mysqlparser
 from authappliance.lib.freeradiusparser.freeradiusparser import ClientConfParser
 from authappliance.lib.crontabparser.cronjobparser import CronJobParser, CronJob
+from authappliance.lib.utils import to_unicode
 import socket
 from subprocess import Popen, PIPE, call
 
@@ -127,7 +128,8 @@ class Backup(object):
         the password.
         Return a tuple (success, stdout, stderr).
         '''
-        proc = Popen(BACKUP_CMD, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen(BACKUP_CMD, shell=True, stdout=PIPE, stderr=PIPE,
+                     universal_newlines=True)
         stdout, stderr = proc.communicate()
         return proc.returncode == 0, stdout, stderr
         
@@ -139,7 +141,8 @@ class Backup(object):
         :type bfile: string
         :return: tuple (success, stdout, stderr)
         '''
-        proc = Popen(RESTORE_CMD % BACKUP_DIR + "/" + bfile, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen(RESTORE_CMD % BACKUP_DIR + "/" + bfile, shell=True,
+                     stdout=PIPE, stderr=PIPE, universal_newlines=True)
         stdout, stderr = proc.communicate()
         return proc.returncode == 0, stdout, stderr
 
@@ -244,7 +247,7 @@ PI_AUDIT_KEY_PRIVATE = '/etc/privacyidea/private.pem'
 PI_AUDIT_KEY_PUBLIC = '/etc/privacyidea/public.pem'
 PI_PEPPER = 'zzsWra6vnoYFrlVXJM3DlgPO'
 SECRET_KEY = 'sfYF0kW6MsZmmg9dBlf5XMWE'
-SQLALCHEMY_DATABASE_URI = 'mysql://pi:P4yvb3d1Thw_@localhost/pi'
+SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://pi:P4yvb3d1Thw_@localhost/pi'
 PI_LOGFILE = "/var/log/privacyidea/privacyidea.log"
 PI_LOGLEVEL = logging.DEBUG
 PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
@@ -260,7 +263,7 @@ PI_LOGCONFIG = "/etc/privacyidea/logging.cfg"
             # read the file
             with opener(self.file, 'r') as f:
                 content = f.read()
-            self._content_to_config(content)
+            self._content_to_config(to_unicode(content))
 
     def _content_to_config(self, content):
         """
@@ -480,52 +483,41 @@ class OSConfig(object):
         """
         Reboot OS
         """
-        p = Popen(["sudo", 'reboot'],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
-        if r == 0:
+        p = Popen(["sudo", 'reboot'], stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if echo:
                 print("Rebooting system.")
         else:
             if echo:
-                print(_err)
+                print("Unable to reboot system: {0!s}".format(err))
 
     def halt(self, echo=False):
         """
         Shutdown OS
         """
-        p = Popen(["sudo", 'halt'],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
-        if r == 0:
+        p = Popen(["sudo", 'halt'], stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if echo:
                 print("Halting system.")
         else:
             if echo:
-                print(_err)
+                print("Unable to halt system: {0!s}".format(err))
 
     def set_password(self, username):
         call(["passwd", username])
 
     def change_password(self, username, password, echo=False):
-        p = Popen(['chpasswd'],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate("%s:%s" % (username, password))
+        p = Popen(['chpasswd'], stdin=PIPE, stderr=PIPE, universal_newlines=True)
+        _output, err = p.communicate(u"%s:%s" % (username, password))
         r = p.returncode
         if r == 0:
             if echo:
                 print("Password changed.")
         else:
             if echo:
-                print(_err)
+                print(err)
 
     def get_diskfree(self):
         # TODO: get the disk size
@@ -533,24 +525,14 @@ class OSConfig(object):
 
     @classmethod
     def ifdown(cls, iface):
-        p = Popen(['sudo', 'ifdown',
-                   iface],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
+        p = Popen(['sudo', 'ifdown', iface])
+        r = p.wait()
         print(r)
 
     @classmethod
     def ifup(cls, iface):
-        p = Popen(['sudo', 'ifup',
-                   iface],
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
+        p = Popen(['sudo', 'ifup', iface])
+        r = p.wait()
         print(r)
 
     @classmethod
@@ -569,18 +551,16 @@ class OSConfig(object):
             commandline = ['sudo', 'service', service, action]
         else:
             commandline = ['sudo', 'systemctl', action, service]
-        p = Popen(commandline,
-                  stdin=PIPE,
-                  stdout=PIPE,
-                  stderr=PIPE)
-        _output, _err = p.communicate()
-        r = p.returncode
-        if r == 0:
+        p = Popen(commandline, stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if do_print:
                 print("Service %s %s" % (service, action))
         else:
             if do_print:
-                print(_err)
+                print("Unable to {0!s} service {1!s}: {2!s}".format(action,
+                                                                    service,
+                                                                    err))
 
 
 class ApacheConfig(object):

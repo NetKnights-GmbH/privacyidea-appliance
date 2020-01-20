@@ -301,9 +301,7 @@ class LDAPProxyService(object):
 
     @staticmethod
     def _invoke_systemctl(arguments):
-        proc = subprocess.Popen(['systemctl'] + arguments,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+        proc = subprocess.Popen(['systemctl'] + arguments)
         return proc.wait() == 0
 
     @staticmethod
@@ -312,13 +310,11 @@ class LDAPProxyService(object):
         Invoke ``systemctl show`` to retrieve the value of the given property
         of the LDAP proxy unit file. Return it as a string.
         """
-        try:
-            proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
-                                    stdout=subprocess.PIPE, encoding='utf8')
-        except TypeError:
-            proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE, '-p', property_name],
-                                    stdout=subprocess.PIPE)
-        output = proc.communicate()[0].strip()
+        proc = subprocess.Popen(['systemctl', 'show', LDAP_PROXY_UNIT_FILE,
+                                 '-p', property_name], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, universal_newlines=True)
+        out, err = proc.communicate()
+        output = out.strip()
         return output.split("=", 1)[1]
 
     def restart(self):
