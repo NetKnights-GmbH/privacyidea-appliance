@@ -483,27 +483,27 @@ class OSConfig(object):
         """
         Reboot OS
         """
-        p = Popen(["sudo", 'reboot'])
-        r = p.wait()
-        if r == 0:
+        p = Popen(["sudo", 'reboot'], stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if echo:
                 print("Rebooting system.")
         else:
             if echo:
-                print("Unable to reboot system!")
+                print("Unable to reboot system: {0!s}".format(err))
 
     def halt(self, echo=False):
         """
         Shutdown OS
         """
-        p = Popen(["sudo", 'halt'])
-        r = p.wait()
-        if r == 0:
+        p = Popen(["sudo", 'halt'], stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if echo:
                 print("Halting system.")
         else:
             if echo:
-                print("Unable to halt system!")
+                print("Unable to halt system: {0!s}".format(err))
 
     def set_password(self, username):
         call(["passwd", username])
