@@ -23,6 +23,7 @@ import argparse
 import sys
 import platform
 import os
+import re
 from traceback import print_exc
 
 # If the ``privacyidea`` Python package cannot be imported normally,
@@ -533,7 +534,8 @@ class Peer(object):
 
     def setup_freeradius(self):
         """
-        Copy FreeRADIUS configuration to the remote peer and restart the freeradius daemon.
+        Copy FreeRADIUS configuration to the remote peer and restart the
+        freeradius daemon.
         """
         self.info = ""
         # Collect all local FreeRADIUS config files that should be copied.
@@ -541,9 +543,17 @@ class Peer(object):
         # but excludes /etc/freeradius/certs (because it contains private keys)
         # and /etc/freeradius/sites-enabled (because it contains symlinks)
         config_files = ["/etc/privacyidea/rlm_perl.ini"]
-        config_directories = ["/etc/freeradius/",
-                              "/etc/freeradius/modules",
-                              "/etc/freeradius/sites-available"]
+        # check the freeradius version
+        if os.path.exists('/etc/freeradius/3.0'):
+            rad_ver = 3
+            config_directories = ["/etc/freeradius/3.0",
+                                  "/etc/freeradius/3.0/mods-available",
+                                  "/etc/freeradius/3.0/sites-available"]
+        else:
+            rad_ver = 2
+            config_directories = ["/etc/freeradius",
+                                  "/etc/freeradius/modules",
+                                  "/etc/freeradius/sites-available"]
         for directory in config_directories:
             for filename in os.listdir(directory):
                 absolute_filename = os.path.join(directory, filename)
@@ -562,22 +572,12 @@ class Peer(object):
                 self.add_info(filename)
                 sftp.put(filename, filename)
         self.add_info("")
-        # Transfer enabled/disabled sites
-        local_enabled_sites = set(os.listdir("/etc/freeradius/sites-enabled/"))
-        remote_enabled_sites = set(sftp.listdir("/etc/freeradius/sites-enabled/"))
-        # Remotely disable sites that are not enabled locally
-        for site in remote_enabled_sites:
-            if site not in local_enabled_sites:
-                self.add_info("Remotely disabling site {!s} ...".format(site))
-                site_filename = os.path.join("/etc/freeradius/sites-enabled", site)
-                sftp.unlink(site_filename)
-        # Enable locally enabled sites that are not already enabled remotely
-        for site in local_enabled_sites:
-            if site not in remote_enabled_sites:
-                self.add_info("Remotely enabling site {!s} ...".format(site))
-                available_filename = os.path.join("/etc/freeradius/sites-available", site)
-                enabled_filename = os.path.join("/etc/freeradius/sites-enabled", site)
-                sftp.symlink(available_filename, enabled_filename)
+        self.sync_enabled_symlinks(sftp, config_directories[2])
+        if rad_ver == 3:
+            # with freeradius 3 the modules must be enabled explicitely
+            self.sync_enabled_symlinks(sftp, config_directories[1],
+                                       module='mod')
+
         self.add_info("")
         self.add_info("Restarting remote FreeRADIUS server ...")
         execute_ssh_command_and_wait(ssh, "service freeradius restart")
@@ -586,6 +586,27 @@ class Peer(object):
         ssh.close()
         self.display_messages()
         return True
+
+    def sync_enabled_symlinks(self, sftp, available_dir, module='site'):
+        enabled_dir = re.sub(r'-available$', '-enabled', available_dir)
+        # Transfer enabled/disabled sites
+        local_enabled = set(os.listdir(enabled_dir))
+        remote_enabled = set(sftp.listdir(enabled_dir))
+        # Remotely disable sites that are not enabled locally
+        for entry in remote_enabled:
+            if entry not in local_enabled:
+                self.add_info("Remotely disabling {0!s} "
+                              "{1!s} ...".format(module, entry))
+                entry_linkname = os.path.join(enabled_dir, entry)
+                sftp.unlink(entry_linkname)
+        # Enable locally enabled sites that are not already enabled remotely
+        for entry in local_enabled:
+            if entry not in remote_enabled:
+                self.add_info("Remotely enabling {0!s} "
+                              "{1!s} ...".format(module, entry))
+                available_filename = os.path.join(available_dir, entry)
+                enabled_filename = os.path.join(enabled_dir, entry)
+                sftp.symlink(available_filename, enabled_filename)
 
     def setup_redundancy(self):
         #
