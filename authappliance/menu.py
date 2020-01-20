@@ -375,14 +375,14 @@ class Peer(object):
         # Generate local keypair
         proc = Popen(generate_key_command, shell=True, stdout=PIPE,
                      stderr=PIPE, universal_newlines=True)
-        stdout, stderr = proc.communicate('\n\n')  # press <RETURN> two times
+        _stdout, stderr = proc.communicate('\n\n')  # press <RETURN> two times
         if proc.returncode != 0:
             self.add_info("ERROR: Could not generate local keypair")
             self.add_info(stderr)
             return False
 
         # Generate remote keypair
-        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, generate_key_command)
+        returncode, _stdout, stderr = execute_ssh_command_and_wait(ssh, generate_key_command)
         if returncode != 0:
             self.add_info("ERROR: Could not generate remote keypair")
             self.add_info(stderr)
@@ -451,15 +451,15 @@ class Peer(object):
         # Start the tinc nets
         start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
         # locally
-        proc = Popen(start_command, shell=True, stdout=PIPE, stderr=PIPE,
+        proc = Popen(start_command, shell=True, stderr=PIPE,
                      universal_newlines=True)
-        stdout, stderr = proc.communicate()
-        if proc.wait() != 0:
+        _stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
             self.add_info('ERROR: Could not bring up the tinc VPN locally')
             self.add_info(stderr)
             return False
         # remotely
-        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, start_command)
+        returncode, _stdout, stderr = execute_ssh_command_and_wait(ssh, start_command)
         if returncode != 0:
             self.add_info('ERROR: Could not bring up the tinc VPN remotely')
             self.add_info(stderr)
@@ -472,15 +472,16 @@ class Peer(object):
         # Ping ten times -- return code will be 0 even if the first few pings do not get a reply.
         ping_command = 'ping -c 10 {}'
         proc = Popen(ping_command.format(remote_vpn_ip), shell=True,
-                     stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        stdout, stderr = proc.communicate()
+                     stdout=PIPE, universal_newlines=True)
+        stdout, _stderr = proc.communicate()
         if proc.returncode != 0:
             self.add_info('ERROR: Could not ping remote host from local host')
             self.add_info(stdout)
             return False
 
         # Try to ping REMOTE -> LOCAL
-        returncode, stdout, stderr = execute_ssh_command_and_wait(ssh, ping_command.format(local_vpn_ip))
+        returncode, stdout, _stderr = execute_ssh_command_and_wait(ssh, ping_command.format(
+            local_vpn_ip))
         if returncode != 0:
             self.add_info('ERROR: Could not ping local host from remote host')
             self.add_info(stdout)
@@ -511,7 +512,7 @@ class Peer(object):
         self.info = ""
         # Shutdown, ignore the return value
         proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True)
-        proc.communicate()
+        proc.wait()
         self.add_info('tincd for {} has been shut down.'.format(vpn_name))
 
         # Remove from nets.boot
@@ -693,7 +694,7 @@ class Peer(object):
         p = Popen(["mysqldump", "--defaults-extra-file=/etc/mysql/debian.cnf",
                    "--databases", "pi"],
                   stdout=dumpfile, stderr=PIPE, universal_newlines=True)
-        output, err = p.communicate()
+        _output, err = p.communicate()
         r = p.wait()
         if r == 0:
             self.add_info("Saved SQL dump to {0}".format(dumpfile.name))

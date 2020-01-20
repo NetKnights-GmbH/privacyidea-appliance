@@ -484,42 +484,40 @@ class OSConfig(object):
         Reboot OS
         """
         p = Popen(["sudo", 'reboot'])
-        _output, _err = p.communicate()
-        r = p.returncode
+        r = p.wait()
         if r == 0:
             if echo:
                 print("Rebooting system.")
         else:
             if echo:
-                print(_err)
+                print("Unable to reboot system!")
 
     def halt(self, echo=False):
         """
         Shutdown OS
         """
         p = Popen(["sudo", 'halt'])
-        _output, _err = p.communicate()
-        r = p.returncode
+        r = p.wait()
         if r == 0:
             if echo:
                 print("Halting system.")
         else:
             if echo:
-                print(_err)
+                print("Unable to halt system!")
 
     def set_password(self, username):
         call(["passwd", username])
 
     def change_password(self, username, password, echo=False):
-        p = Popen(['chpasswd'], stdin=PIPE, universal_newlines=True)
-        _output, _err = p.communicate(u"%s:%s" % (username, password))
+        p = Popen(['chpasswd'], stdin=PIPE, stderr=PIPE, universal_newlines=True)
+        _output, err = p.communicate(u"%s:%s" % (username, password))
         r = p.returncode
         if r == 0:
             if echo:
                 print("Password changed.")
         else:
             if echo:
-                print(_err)
+                print(err)
 
     def get_diskfree(self):
         # TODO: get the disk size
@@ -528,15 +526,13 @@ class OSConfig(object):
     @classmethod
     def ifdown(cls, iface):
         p = Popen(['sudo', 'ifdown', iface])
-        _output, _err = p.communicate()
-        r = p.returncode
+        r = p.wait()
         print(r)
 
     @classmethod
     def ifup(cls, iface):
         p = Popen(['sudo', 'ifup', iface])
-        _output, _err = p.communicate()
-        r = p.returncode
+        r = p.wait()
         print(r)
 
     @classmethod
@@ -555,15 +551,16 @@ class OSConfig(object):
             commandline = ['sudo', 'service', service, action]
         else:
             commandline = ['sudo', 'systemctl', action, service]
-        p = Popen(commandline)
-        _output, _err = p.communicate()
-        r = p.returncode
-        if r == 0:
+        p = Popen(commandline, stderr=PIPE, universal_newlines=True)
+        _out, err = p.communicate()
+        if p.returncode == 0:
             if do_print:
                 print("Service %s %s" % (service, action))
         else:
             if do_print:
-                print(_err)
+                print("Unable to {0!s} service {1!s}: {2!s}".format(action,
+                                                                    service,
+                                                                    err))
 
 
 class ApacheConfig(object):
