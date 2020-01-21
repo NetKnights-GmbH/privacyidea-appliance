@@ -882,7 +882,6 @@ class DBMenu(object):
             if code != self.d.OK:
                 return
             else:
-                """
                 code = self.d.yesno(
                     "By default, communication between the MySQL peers is "
                     "unencrypted. Optionally, the appliance tool can set up "
@@ -917,7 +916,6 @@ class DBMenu(object):
                             return
                     else:
                         return
-                """
                 code = self.d.yesno(
                     "The privacyIDEA appliance includes a FreeRADIUS server that redirects authentication requests "
                     "to the local privacyIDEA instance. Should we copy the current local FreeRADIUS configuration to "
