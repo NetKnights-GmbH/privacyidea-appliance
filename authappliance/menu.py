@@ -64,7 +64,7 @@ from privacyidea.lib.auth import (create_db_admin, get_db_admins,
 from privacyidea.app import create_app
 from netaddr import IPAddress, IPNetwork, AddrFormatError
 from paramiko.client import SSHClient
-from paramiko import SSHException, AutoAddPolicy, SFTPClient, Transport
+from paramiko import SSHException, AutoAddPolicy
 from subprocess import Popen, PIPE
 import random
 import os
@@ -331,6 +331,13 @@ class Peer(object):
             self.add_info(stderr)
         return stdout, stderr
 
+    def _create_sftp_connection(self, user="root"):
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(AutoAddPolicy())
+        ssh.connect(str(self.remote_ip), username=user, password=self.password)
+        sftp = ssh.open_sftp()
+        return ssh, sftp
+
     def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
         """
         Set up a tinc tunnel between self.local_ip and self.remote_ip
@@ -339,10 +346,7 @@ class Peer(object):
         self.add_info("Setting up the tinc VPN ...")
 
         # create SFTP client to remote server
-        ssh = SSHClient()
-        ssh.set_missing_host_key_policy(AutoAddPolicy())
-        ssh.connect(str(self.remote_ip), username="root", password=self.password)
-        sftp = ssh.open_sftp()
+        ssh, sftp = self._create_sftp_connection()
         local_io_handler = LocalIOHandler()
         remote_io_handler = SFTPIOHandler(sftp)
 
@@ -561,10 +565,7 @@ class Peer(object):
                     config_files.append(absolute_filename)
         self.add_info("copying FreeRADIUS configuration:")
         # create SSH and SFTP client to remote server
-        ssh = SSHClient()
-        ssh.set_missing_host_key_policy(AutoAddPolicy())
-        ssh.connect(str(self.remote_ip), username="root", password=self.password)
-        sftp = ssh.open_sftp()
+        ssh, sftp = self._create_sftp_connection()
 
         # Copy configuration files to remote server
         for filename in config_files:
@@ -614,9 +615,7 @@ class Peer(object):
         #
         self.info = ""
         self.add_info("copying files to remote server...")
-        transport = Transport((str(self.remote_ip), 22))
-        transport.connect(username="root", password=self.password)
-        sftp = SFTPClient.from_transport(transport)
+        ssh, sftp = self._create_sftp_connection()
         for file in self.files:
             if os.path.exists(file):
                 sftp.put(file, file)
@@ -662,8 +661,7 @@ class Peer(object):
         for key, value in conf_values.items():
             remote_my_cnf.set('mysqld', key, value)
 
-        sftp.close()
-        transport.close()
+        ssh.close()
 
         #
         # Restart services
@@ -722,12 +720,9 @@ class Peer(object):
             # copy the file.name to the remote machine and run the file.
             self.add_info("Copying to remote server and creating remote "
                           "database. This may take a while...")
-            transport = Transport((str(self.remote_ip), 22))
-            transport.connect(username="root", password=self.password)
-            sftp = SFTPClient.from_transport(transport)
+            ssh, sftp = self._create_sftp_connection()
             sftp.put(dumpfile.name, dumpfile.name)
-            sftp.close()
-            transport.close()
+            ssh.close()
             # delete the file
             os.unlink(dumpfile.name)
             # run the file remotely
