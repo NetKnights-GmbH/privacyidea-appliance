@@ -31,6 +31,7 @@ from traceback import print_exc
 # packages to the search path and try again.
 site_version = 'python' + '.'.join(platform.python_version_tuple()[0:2])
 PRIVACYIDEA_SITE_PACKAGES = '/opt/privacyidea/lib/' + site_version + '/site-packages/'
+PRIVACYIDEA_VPN = 'privacyideaVPN'
 try:
     import privacyidea
 except ImportError:
@@ -338,7 +339,7 @@ class Peer(object):
         sftp = ssh.open_sftp()
         return ssh, sftp
 
-    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name='privacyideaVPN'):
+    def setup_tinc(self, local_vpn_ip, remote_vpn_ip, vpn_subnet, vpn_name=PRIVACYIDEA_VPN):
         """
         Set up a tinc tunnel between self.local_ip and self.remote_ip
         and update self.local_ip and self.remote_ip accordingly.
@@ -454,7 +455,7 @@ class Peer(object):
         remote_nets_boot.save()
 
         # Start the tinc nets
-        start_command = 'tincd -n {}'.format(pipes.quote(vpn_name))
+        start_command = 'systemctl enable tinc@{} --now'.format(pipes.quote(PRIVACYIDEA_VPN))
         # locally
         proc = Popen(start_command, shell=True, stderr=PIPE,
                      universal_newlines=True)
@@ -503,7 +504,7 @@ class Peer(object):
         return True
 
     @staticmethod
-    def is_tinc_configured(vpn_name='privacyideaVPN'):
+    def is_tinc_configured(vpn_name=PRIVACYIDEA_VPN):
         """ Return true if /etc/tinc/privacyideaVPN exists and
         /etc/tinc/nets.boot contains the VPN name """
         if os.path.exists(os.path.join('/etc/tinc', vpn_name)):
@@ -512,11 +513,12 @@ class Peer(object):
                 return True
         return False
 
-    def delete_tinc(self, vpn_name='privacyideaVPN'):
+    def delete_tinc(self, vpn_name=PRIVACYIDEA_VPN):
         """ Stop and delete the tinc network """
         self.info = ""
         # Shutdown, ignore the return value
-        proc = Popen('tincd -n {} -k'.format(pipes.quote(vpn_name)), shell=True)
+        stop_command = 'systemctl disable tinc@{} --now'.format(pipes.quote(vpn_name))
+        proc = Popen(stop_command, shell=True)
         proc.wait()
         self.add_info('tincd for {} has been shut down.'.format(vpn_name))
 
@@ -926,7 +928,7 @@ class DBMenu(object):
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
-        message = ("Do you really want to stop the redundancy? This "
+        message = ("Do you really want to stop the redusystemndancy? This "
                    "server will be reverted to a single master. The "
                    "other master will not be touched. You can simply "
                    "shut down the other machine.")
