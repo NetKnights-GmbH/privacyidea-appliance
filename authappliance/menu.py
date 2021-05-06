@@ -928,7 +928,7 @@ class DBMenu(object):
                 self.peer.setup_redundancy()
 
     def stop_redundancy(self):
-        message = ("Do you really want to stop the redusystemndancy? This "
+        message = ("Do you really want to stop the redundancy? This "
                    "server will be reverted to a single master. The "
                    "other master will not be touched. You can simply "
                    "shut down the other machine.")
