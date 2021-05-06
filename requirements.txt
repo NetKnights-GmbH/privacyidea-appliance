@@ -1,7 +1,7 @@
 bcrypt==3.1.7
 cffi==1.13.2
 configobj==5.0.6
-cryptography==3.2
+cryptography==3.3.2
 enum34==1.1.6; python_version < '3.0'
 ipaddress==1.0.23; python_version < '3.0'
 netaddr==0.7.19
