@@ -201,7 +201,9 @@ class WebserverMenu(object):
 
 class Peer(object):
     files = ["/etc/privacyidea/enckey", "/etc/privacyidea/logging.cfg",
-             "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem"]
+             "/etc/privacyidea/private.pem", "/etc/privacyidea/public.pem",
+             "/var/lib/mysql/ca.pem", "/var/lib/mysql/ca-key.pem",
+             "/var/lib/mysql/server-cert.pem", "/var/lib/mysql/server-key.pem"]
 
     def __init__(self, dialog, pConfig, dbConfig, remote_ip=None,
                  password=None, local_ip=None):
@@ -639,7 +641,10 @@ class Peer(object):
         shared_my_cnf_values = {"auto_increment_increment": 2,
                                 "log_bin": "/var/log/mysql/mysql-bin.log",
                                 "binlog_do_db": "pi",
-                                "bind-address": "0.0.0.0"
+                                "bind-address": "0.0.0.0",
+                                "ssl_ca":  "ca.pem",
+                                "ssl_cert": "server-cert.pem",
+                                "ssl_key": "server-key.pem"
                                 }
         remote_my_cnf_values = {"server-id": 2,
                                 "auto_increment_offset": 2}
@@ -696,14 +701,14 @@ class Peer(object):
         # Add the replication users on both machines
         self.add_info("Drop and add replication user on local machine...")
         self._execute_local_sql("drop user if exists 'replicator'@'%';")
-        self._execute_local_sql("""create user 'replicator'@'%' identified by '{}';
-                                 grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
+        self._execute_local_sql("""create user 'replicator'@'%' identified by '{}' REQUIRE SSL;
+                                  grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
 
         self.add_info("Drop and add replication user on remote machine...")
         # Drop user
         _, err = self._execute_remote_sql("drop user if exists 'replicator'@'%'")
-        self._execute_remote_sql("""create user 'replicator'@'%' identified by '{}';
-                                 grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
+        self._execute_remote_sql("""create user 'replicator'@'%' identified by '{}' REQUIRE SSL;
+                                  grant replication slave on *.* to 'replicator'@'%';""".format(replicator_password))
         #
         # dump it and copy it to the other server
         #
@@ -773,7 +778,7 @@ class Peer(object):
         self._execute_remote_sql("""
             stop slave;
             CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator',
-            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position};
+            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position}, master_ssl=1, master_ssl_ca='/var/lib/mysql/ca.pem', master_ssl_cert='/var/lib/mysql/server-cert.pem', master_ssl_key='/var/lib/mysql/server-key.pem';
             start slave;""".format(
             replicator_password=replicator_password,
             local_file=self.file_local,
@@ -787,7 +792,7 @@ class Peer(object):
         self._execute_local_sql("""
             stop slave;
             CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
-            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{remote_file}', MASTER_LOG_POS = {remote_position};
+            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{remote_file}', MASTER_LOG_POS = {remote_position}, master_ssl=1, master_ssl_ca='/var/lib/mysql/ca.pem', master_ssl_cert='/var/lib/mysql/server-cert.pem', master_ssl_key='/var/lib/mysql/server-key.pem';
             start slave;""".format(
             replicator_password=replicator_password,
             remote_ip=self.remote_ip,
