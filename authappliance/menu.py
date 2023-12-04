@@ -17,7 +17,6 @@
 """
 text dialog based setup tool to configure the privacyIDEA basics.
 """
-from __future__ import print_function
 import locale
 import argparse
 import sys
@@ -68,7 +67,6 @@ from paramiko.client import SSHClient
 from paramiko import SSHException, AutoAddPolicy
 from subprocess import Popen, PIPE
 import random
-import os
 from tempfile import NamedTemporaryFile
 
 from authappliance.lib.extdialog import ExtDialog
