@@ -59,7 +59,7 @@ from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
                                          CRON_USER, BACKUP_CMD, RemoteMySQLConfig,
                                          SERVICE_APACHE,
                                          SERVICE_FREERADIUS, SERVICE_LDAP_PROXY)
-from privacyidea.lib.auth import (create_db_admin, get_db_admins,
+from privacyidea.lib.auth import (create_db_admin, get_all_db_admins,
                                   delete_db_admin)
 from privacyidea.app import create_app
 from netaddr import IPAddress, IPNetwork, AddrFormatError
@@ -1960,7 +1960,7 @@ class MainMenu(object):
     def privacyidea_admins(self):
         while 1:
             with self.app.app_context():
-                db_admins = get_db_admins()
+                db_admins = get_all_db_admins()
             admins = [("Add new admin", "Add a new administrator")]
             for admin in db_admins:
                 admins.append((admin.username, admin.email or ""))
