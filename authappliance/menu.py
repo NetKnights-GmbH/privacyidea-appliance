@@ -48,7 +48,7 @@ except ImportError:
 import time
 from functools import partial
 
-import pipes
+import shlex
 import shutil
 
 from authappliance.lib.appliance import (Backup, Audit, FreeRADIUSConfig,
@@ -222,14 +222,32 @@ class Peer(object):
 
     def get_redundancy_status(self, role):
         """
-        Given a role (one of "MASTER", "SLAVE"), run "SHOW <role> STATUS" locally
-        and return the result as a dictionary.
+        Return the local binary-log or replica status as a dictionary.
+
+        The public role names SOURCE/REPLICA use the MySQL 8.4 terminology.
+        MASTER/SLAVE remain accepted for compatibility with older callers.
         """
-        if role.upper() not in ('MASTER', 'SLAVE'):
-            raise RuntimeError('{} should be one of MASTER, SLAVE'.format(role.upper()))
-        result, err = self._execute_local_sql("SHOW {} STATUS".format(role))
+        statements = {
+            'MASTER': 'SHOW BINARY LOG STATUS',
+            'SOURCE': 'SHOW BINARY LOG STATUS',
+            'SLAVE': 'SHOW REPLICA STATUS',
+            'REPLICA': 'SHOW REPLICA STATUS',
+        }
+        normalized_role = role.upper()
+        if normalized_role not in statements:
+            raise RuntimeError(
+                '{} should be one of MASTER, SOURCE, SLAVE, REPLICA'.format(
+                    normalized_role))
+
+        result, err = self._execute_local_sql(statements[normalized_role])
+        if err:
+            raise RuntimeError(
+                'Could not read {} status: {}'.format(normalized_role, err))
+
         lines = result.splitlines()
-        assert len(lines) == 2
+        if len(lines) < 2:
+            return {}
+
         keys = lines[0].strip().split('\t')
         values = lines[1].strip().split('\t')
         return dict(zip(keys, values))
@@ -296,11 +314,11 @@ class Peer(object):
         if err:
             self.add_info("Error dropping replicator user!")
 
-        # stop the slave
-        self.add_info("Stopping the slave...")
-        _, err = self._execute_local_sql("stop slave; reset slave;")
+        # stop and reset the replica
+        self.add_info("Stopping the replica...")
+        _, err = self._execute_local_sql("STOP REPLICA; RESET REPLICA;")
         if err:
-            self.add_info("Error stopping slave: {0}".format(err))
+            self.add_info("Error stopping replica: {0}".format(err))
         # restart mysql
         self.add_info("Restarting MySQL server...")
         self.dbConfig.restart()
@@ -376,7 +394,7 @@ class Peer(object):
         remote_tinc_conf.save()
 
         # this command generates /etc/tinc/[vpn_name]/rsa_key.priv and /etc/tinc/[vpn_name]/hosts/[hostname]
-        generate_key_command = 'tincd -n {} -K 4096'.format(pipes.quote(vpn_name))
+        generate_key_command = 'tincd -n {} -K 4096'.format(shlex.quote(vpn_name))
 
         # Generate local keypair
         proc = Popen(generate_key_command, shell=True, stdout=PIPE,
@@ -455,7 +473,7 @@ class Peer(object):
         remote_nets_boot.save()
 
         # Start the tinc nets
-        start_command = 'systemctl enable tinc@{} --now'.format(pipes.quote(PRIVACYIDEA_VPN))
+        start_command = 'systemctl enable tinc@{} --now'.format(shlex.quote(PRIVACYIDEA_VPN))
         # locally
         proc = Popen(start_command, shell=True, stderr=PIPE,
                      universal_newlines=True)
@@ -517,7 +535,7 @@ class Peer(object):
         """ Stop and delete the tinc network """
         self.info = ""
         # Shutdown, ignore the return value
-        stop_command = 'systemctl disable tinc@{} --now'.format(pipes.quote(vpn_name))
+        stop_command = 'systemctl disable tinc@{} --now'.format(shlex.quote(vpn_name))
         proc = Popen(stop_command, shell=True)
         proc.wait()
         self.add_info('tincd for {} has been shut down.'.format(vpn_name))
@@ -747,9 +765,8 @@ class Peer(object):
         #
         # Get the position on server1
         #
-        output, err = self._execute_local_sql("show master status;")
-        r = p.returncode
-        if r == 0:
+        output, err = self._execute_local_sql("SHOW BINARY LOG STATUS;")
+        if not err:
             self.add_info(output)
             for line in output.split("\n"):
                 elems = line.split()
@@ -762,7 +779,7 @@ class Peer(object):
 
         self.add_info("Configuring MySQL on remote server...")
         # clean up the old database
-        output, _ = self._execute_remote_sql('show master status;')
+        output, _ = self._execute_remote_sql('SHOW BINARY LOG STATUS;')
         self.add_info(output)
         for line in output.split("\n"):
             elems = line.split()
@@ -776,10 +793,10 @@ class Peer(object):
         # create everything remote
         self.add_info("Add replication on remote server...")
         self._execute_remote_sql("""
-            stop slave;
-            CHANGE MASTER TO MASTER_HOST = '{local_ip}', MASTER_USER = 'replicator',
-            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{local_file}', MASTER_LOG_POS = {local_position}, master_ssl=1, master_ssl_ca='/var/lib/mysql/ca.pem', master_ssl_cert='/var/lib/mysql/server-cert.pem', master_ssl_key='/var/lib/mysql/server-key.pem';
-            start slave;""".format(
+            STOP REPLICA;
+            CHANGE REPLICATION SOURCE TO SOURCE_HOST = '{local_ip}', SOURCE_USER = 'replicator',
+            SOURCE_PASSWORD = '{replicator_password}', SOURCE_LOG_FILE = '{local_file}', SOURCE_LOG_POS = {local_position}, SOURCE_SSL=1, SOURCE_SSL_CA='/var/lib/mysql/ca.pem', SOURCE_SSL_CERT='/var/lib/mysql/server-cert.pem', SOURCE_SSL_KEY='/var/lib/mysql/server-key.pem';
+            START REPLICA;""".format(
             replicator_password=replicator_password,
             local_file=self.file_local,
             local_position=self.position_local,
@@ -790,10 +807,10 @@ class Peer(object):
         #
         self.add_info("Add replication on local server...")
         self._execute_local_sql("""
-            stop slave;
-            CHANGE MASTER TO MASTER_HOST = '{remote_ip}', MASTER_USER = 'replicator',
-            MASTER_PASSWORD = '{replicator_password}', MASTER_LOG_FILE = '{remote_file}', MASTER_LOG_POS = {remote_position}, master_ssl=1, master_ssl_ca='/var/lib/mysql/ca.pem', master_ssl_cert='/var/lib/mysql/server-cert.pem', master_ssl_key='/var/lib/mysql/server-key.pem';
-            start slave;""".format(
+            STOP REPLICA;
+            CHANGE REPLICATION SOURCE TO SOURCE_HOST = '{remote_ip}', SOURCE_USER = 'replicator',
+            SOURCE_PASSWORD = '{replicator_password}', SOURCE_LOG_FILE = '{remote_file}', SOURCE_LOG_POS = {remote_position}, SOURCE_SSL=1, SOURCE_SSL_CA='/var/lib/mysql/ca.pem', SOURCE_SSL_CERT='/var/lib/mysql/server-cert.pem', SOURCE_SSL_KEY='/var/lib/mysql/server-key.pem';
+            START REPLICA;""".format(
             replicator_password=replicator_password,
             remote_ip=self.remote_ip,
             remote_file=self.file_remote,
@@ -952,23 +969,24 @@ class DBMenu(object):
             u"Server ID: {server_id!s}\n"
             u"Bind Address: {bind_address!s}\n".format(active=r, bind_address=bind, server_id=server_id)]
         if r:
-            master_status = self.peer.get_redundancy_status("MASTER")
-            slave_status = self.peer.get_redundancy_status("SLAVE")
-            slave_sql_error = slave_status['Last_SQL_Error'] or '(none)'
-            slave_io_error = slave_status['Last_IO_Error'] or '(none)'
+            source_status = self.peer.get_redundancy_status("SOURCE")
+            replica_status = self.peer.get_redundancy_status("REPLICA")
+            replica_sql_error = replica_status.get('Last_SQL_Error') or '(none)'
+            replica_io_error = replica_status.get('Last_IO_Error') or '(none)'
             info.append(
-                u"Master\n"
+                u"Source\n"
                 u"------\n"
-                u"File: {master_file}\n"
-                u"Position: {master_position}\n"
+                u"File: {source_file}\n"
+                u"Position: {source_position}\n"
                 u"\n"
-                u"Slave\n"
-                u"-----\n"
-                u"Last SQL Error: {slave_sql_error}\n"
-                u"Last IO Error: {slave_io_error}".format(master_file=master_status['File'],
-                                                          master_position=master_status['Position'],
-                                                          slave_sql_error=slave_sql_error,
-                                                          slave_io_error=slave_io_error))
+                u"Replica\n"
+                u"-------\n"
+                u"Last SQL Error: {replica_sql_error}\n"
+                u"Last IO Error: {replica_io_error}".format(
+                    source_file=source_status.get('File', '(unknown)'),
+                    source_position=source_status.get('Position', '(unknown)'),
+                    replica_sql_error=replica_sql_error,
+                    replica_io_error=replica_io_error))
         self.d.msgbox("\n".join(info), width=60, height=20)
 
     def db_init(self):
@@ -2142,3 +2160,4 @@ def main():
     args = create_arguments()
     pS = MainMenu(config=args.file)
     pS.main_menu()
+
